@@ -1,0 +1,81 @@
+rules:
+
+  # ------------------------------------
+  # SCHOOL REG VS PART -> PIE
+  # ------------------------------------
+  - name: school_registration_pie
+    when:
+      special_case: reg_vs_part
+      entity: school
+    then:
+      chart: pie
+      side_text: true
+      split_slides: true
+      split_by: school
+
+  # ------------------------------------
+  # GRADE REG VS PART -> GROUPED BAR
+  # ------------------------------------
+  - name: grade_registration_grouped
+    when:
+      special_case: reg_vs_part
+      entity: grade
+    then:
+      chart: grouped_bar
+
+  # ------------------------------------
+  # LO -> HORIZONTAL %
+  # ------------------------------------
+  - name: lo_percent
+    when:
+      dataset_family: lo
+    then:
+      chart: bar-horizontal
+      percent_labels: true
+
+  # ------------------------------------
+  # QLVL -> COLUMN %
+  # ------------------------------------
+  - name: qlvl_percent
+    when:
+      dataset_family: qlvl
+    then:
+      chart: column
+      percent_labels: true
+
+  # ------------------------------------
+  # PERF SUMMARY -> COLUMN %
+  # ------------------------------------
+  - name: perf_summary_percent
+    when:
+      dataset_family: perf_summary
+    then:
+      chart: column
+      percent_labels: true
+
+  # ------------------------------------
+  # SUB WISE + SUMMARY -> COLUMN %
+  # ------------------------------------
+  - name: summary_percent
+    when:
+      dataset_family: summary
+    then:
+      chart: column
+      percent_labels: true
+
+  # ------------------------------------
+  # MULTI METRIC FALLBACK (LOW PRIORITY)
+  # ------------------------------------
+  - name: multi_metric_grouped
+    when:
+      series_count: ">1"
+    then:
+      chart: grouped_bar
+
+  # ------------------------------------
+  # DEFAULT
+  # ------------------------------------
+  - name: fallback
+    when: {}
+    then:
+      chart: column
