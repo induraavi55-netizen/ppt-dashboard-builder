@@ -1,4 +1,7 @@
-git rm -r --cached backend/exports
-git rm -r --cached backend/**/__pycache__
-git rm -r --cached*.pyc
-
+backend/exports/
+**/__pycache__/
+*.pyc
+.venv/
+node_modules/
+frontend/dist/
+.env
