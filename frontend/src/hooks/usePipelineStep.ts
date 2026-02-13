@@ -11,6 +11,7 @@ export function usePipelineStep(stepName: string, onComplete?: () => void) {
     const execute = useCallback(async () => {
         setLoading(true);
         setError(null);
+        setCompleted(false);
         setLogs([]);
         setJobId(null);
 
