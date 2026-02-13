@@ -295,9 +295,17 @@ from fastapi.responses import JSONResponse, FileResponse
 
 @router.post("/participation/step0")
 async def run_participation_step0(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    job_id = orchestrator.create_job("participation-0", db)
-    background_tasks.add_task(orchestrator.run_participation_step0, job_id)
-    return {"job_id": job_id, "status": "started"}
+    print(f"==== RUN PARTICIPATION STEP 0 REQUEST RECEIVED ====")
+    try:
+        job_id = orchestrator.create_job("participation-0", db)
+        print(f"Job created: {job_id}")
+        background_tasks.add_task(orchestrator.run_participation_step0, job_id)
+        return {"job_id": job_id, "status": "started"}
+    except Exception as e:
+        print(f"ERROR starting step0: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to start job: {e}")
 
 @router.post("/performance/step{step_num}")
 async def run_performance_step(step_num: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

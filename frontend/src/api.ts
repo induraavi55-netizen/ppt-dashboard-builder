@@ -71,7 +71,7 @@ export const uploadTemplate = async (file: File): Promise<{ status: string }> =>
 
 export const runPipelineStep = async (stepName: string) => {
     const [category, step] = stepName.split('-');
-    const res = await api.post(`/pipeline/${category}/step${step}`);
+    const res = await api.post(`/pipeline/${category}/step${step}`, {}); // Send empty body
     return res.data;
 };
 

@@ -268,7 +268,12 @@ export default function AnalysisPipelinePage() {
 
         } catch (err: any) {
             console.error("Run All failed", err);
-            alert(`Pipeline execution failed: ${err.message}`);
+            let msg = err.message;
+            if (err.response?.data?.detail) {
+                msg = err.response.data.detail;
+            }
+            alert(`Pipeline execution failed: ${msg}`);
+            setRunAllLogs(prev => [...prev, `❌ Error: ${msg}`]);
         } finally {
             setRunningAll(false);
             setCurrentStep(null);

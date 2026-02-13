@@ -44,7 +44,12 @@ export function usePipelineStep(stepName: string, onComplete?: () => void) {
             }, 1000);
 
         } catch (err: any) {
-            setError(err.message || 'Failed to start step');
+            console.error("Step execution failed", err);
+            let msg = err.message || 'Failed to start step';
+            if (err.response?.data?.detail) {
+                msg = err.response.data.detail;
+            }
+            setError(msg);
             setLoading(false);
         }
     }, [stepName, onComplete]);
