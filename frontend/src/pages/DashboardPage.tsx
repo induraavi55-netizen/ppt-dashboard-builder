@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Dataset } from "../types";
@@ -9,7 +9,54 @@ import { Spinner } from "../components/ui/Spinner";
 import { AlertCircle, CheckCircle, FileText, Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
 
-export default function DashboardPage() {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error: Error) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error: Error, errorInfo: any) {
+        console.error("Dashboard Crash:", error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
+                    <div className="max-w-xl w-full bg-white p-8 rounded-lg shadow-lg border border-red-100 text-center">
+                        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                        <h1 className="text-xl font-bold text-gray-900">Dashboard Crashed</h1>
+                        <p className="text-gray-500 mt-2 text-sm">
+                            An unexpected error occurred while rendering the dashboard.
+                        </p>
+
+                        <div className="mt-6 text-left">
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Error Details</div>
+                            <pre className="p-3 bg-red-50 text-red-900 rounded text-xs overflow-auto whitespace-pre-wrap max-h-48 border border-red-200 font-mono">
+                                {this.state.error?.message}
+                                {"\n"}
+                                {this.state.error?.stack?.split("\n").slice(0, 3).join("\n")}
+                            </pre>
+                        </div>
+
+                        <div className="mt-8 flex justify-center gap-4">
+                            <Button onClick={() => window.location.href = "/"} variant="secondary">
+                                Return to Home
+                            </Button>
+                            <Button onClick={() => window.location.reload()} variant="primary">
+                                Reload Page
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+function DashboardContent() {
     const location = useLocation();
     const navigate = useNavigate();
     const params = new URLSearchParams(location.search);
@@ -31,7 +78,6 @@ export default function DashboardPage() {
     });
 
     const datasets = (data?.datasets || []) as Dataset[];
-    console.log("DEBUG: datasets", datasets);
     const projectName = (data?.project?.name || location.state?.projectName || "Unknown Project") as string;
 
     // 2. Template Status
@@ -105,23 +151,21 @@ export default function DashboardPage() {
         );
     }
 
-    // ----------------------------------------------------------------
-    // VALIDATION LOGIC
-    // ----------------------------------------------------------------
-    const PCT_REQUIRED_TYPES = ["lo", "qlvl", "perf_summary", "subwise", "reg_vs_part_grade"];
-
     const issues = useMemo(() => {
         const list: string[] = [];
 
         datasets.forEach(d => {
             if (!d) return;
 
-            // 1. Preview Check
+            // 1. Empty Check
             if (!d.preview || d.preview.length === 0) {
                 list.push(`[BLOCK] Dataset '${d.name}': Empty preview/data.`);
             }
 
             // 2. Percent Column Check (Profiler-aware)
+            // Hardcoded strictly for 'reg_vs_part' or similar if needed, 
+            // but relying on detected_type for now.
+            const PCT_REQUIRED_TYPES = ["reg_vs_part", "participation_summary"]; // Add types as needed
             const family = d.profile?.dataset_family || d.detected_type || "unknown";
             const metricTypes = d.profile?.metric_types || {};
 
@@ -135,12 +179,6 @@ export default function DashboardPage() {
                         k.toLowerCase().includes("percent") || k.includes("%")
                     );
                 }
-
-                console.log(
-                    `[PREFLIGHT] Dataset: ${d.name} | Family: ${family} | ` +
-                    `MetricTypes: ${JSON.stringify(metricTypes)} | ` +
-                    `PercentCol: ${percentCol || "None"}`
-                );
 
                 if (!percentCol) {
                     list.push(`[BLOCK] Dataset '${d.name}' (${family}): Missing percent column.`);
@@ -177,10 +215,6 @@ export default function DashboardPage() {
             // Auto trigger download
             const a = document.createElement('a');
             a.href = url;
-            // Backend sets filename in headers, but we might not access it easily with blob response type in axios without parsing headers.
-            // We'll generate a name here or rely on user saving.
-            // Actually, let's try to get filename from content-disposition if we change api return type, 
-            // but for MVP a generic name + date is fine as per spec "dashboard_v1.2_2026-02-03.pptx"
             const date = new Date().toISOString().split('T')[0];
             a.download = `${projectName.replace(/\s+/g, '_')}_${date}.pptx`;
             document.body.appendChild(a);
@@ -459,4 +493,12 @@ function DatasetCard({ dataset }: { dataset: Dataset }) {
             )}
         </Card>
     )
+}
+
+export default function DashboardPage() {
+    return (
+        <ErrorBoundary>
+            <DashboardContent />
+        </ErrorBoundary>
+    );
 }
