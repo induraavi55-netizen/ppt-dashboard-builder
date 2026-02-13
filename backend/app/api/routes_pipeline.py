@@ -294,18 +294,85 @@ async def upload_pipeline_data(file: UploadFile = File(...), db: Session = Depen
 from fastapi.responses import JSONResponse, FileResponse
 
 @router.post("/participation/step0")
-async def run_participation_step0(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    print(f"==== RUN PARTICIPATION STEP 0 REQUEST RECEIVED ====")
+async def run_participation_step0(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    print("==== RUN PARTICIPATION STEP 0 REQUEST RECEIVED ====")
+
     try:
+        # 1. Verify dataset_uploaded flag
+        dataset_uploaded = orchestrator.get_pipeline_state_value("dataset_uploaded", db)
+
+        if dataset_uploaded != "true":
+            print("Step0 blocked: dataset_uploaded flag is false")
+            raise HTTPException(
+                status_code=400,
+                detail="Dataset not uploaded. Please upload data first."
+            )
+
+        # 2. Verify files exist on disk
+        data_dir = orchestrator.base_dir / "data"
+        reg_file, grade_files, all_files = scan_pipeline_data(data_dir)
+
+        if not reg_file:
+            print("Step0 blocked: REG VS PART.xlsx missing")
+            raise HTTPException(
+                status_code=400,
+                detail="REG VS PART.xlsx missing. Please re-upload dataset."
+            )
+
+        if not grade_files:
+            print("Step0 blocked: Grade files missing")
+            raise HTTPException(
+                status_code=400,
+                detail="Grade files missing. Please re-upload dataset."
+            )
+
+        # 3. Prevent overlapping jobs
+        from app.models.pipeline_job import PipelineJob, JobStatus
+
+        running_jobs = db.query(PipelineJob).filter(
+            PipelineJob.status == JobStatus.RUNNING
+        ).count()
+
+        if running_jobs > 0:
+            print("Step0 blocked: another pipeline job running")
+            raise HTTPException(
+                status_code=400,
+                detail="Another pipeline step is already running."
+            )
+
+        # 4. Start job safely
         job_id = orchestrator.create_job("participation-0", db)
-        print(f"Job created: {job_id}")
-        background_tasks.add_task(orchestrator.run_participation_step0, job_id)
-        return {"job_id": job_id, "status": "started"}
+
+        print(f"Step0 job created: {job_id}")
+
+        background_tasks.add_task(
+            orchestrator.run_participation_step0,
+            job_id
+        )
+
+        return {
+            "job_id": job_id,
+            "status": "started",
+            "message": "Participation analysis started successfully"
+        }
+
+    except HTTPException:
+        raise
+
     except Exception as e:
-        print(f"ERROR starting step0: {e}")
+        print(f"Step0 internal failure: {e}")
+
         import traceback
         traceback.print_exc()
-        raise HTTPException(500, f"Failed to start job: {e}")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start participation analysis: {str(e)}"
+        )
+
 
 @router.post("/performance/step{step_num}")
 async def run_performance_step(step_num: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
