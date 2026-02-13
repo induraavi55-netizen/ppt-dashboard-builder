@@ -12,14 +12,13 @@ from app.api import (
 from app.core.db import Base, engine
 import app.models  # force model registration
 
-# Disable docs if env flag is set
-disable_docs = os.environ.get("DISABLE_DOCS") == "true"
-
 app = FastAPI(
     title="PPT Dashboard Builder",
-    docs_url=None if disable_docs else "/docs",
-    redoc_url=None if disable_docs else "/redoc",
 )
+
+@app.get("/")
+def root():
+    return {"status": "backend working"}
 
 from fastapi.middleware.cors import CORSMiddleware
 
