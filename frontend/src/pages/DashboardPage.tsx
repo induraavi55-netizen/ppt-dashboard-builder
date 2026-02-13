@@ -1,35 +1,109 @@
 import { useState, useMemo } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Dataset } from "../types";
-import { exportProject } from "../api";
+import { exportProject, getProject, checkTemplateStatus, uploadTemplate } from "../api";
 import { Button } from "../components/ui/Button";
 import { Card, CardHeader, CardContent } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
-import { AlertCircle, CheckCircle, FileText, Download } from "lucide-react";
+import { AlertCircle, CheckCircle, FileText, Download, RefreshCcw, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export default function DashboardPage() {
-    const { projectId } = useParams<{ projectId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
+    const params = new URLSearchParams(location.search);
+    const projectId = params.get("project");
 
-    // State from navigation or upload
-    const datasets = (location.state?.datasets || []) as Dataset[];
-    const projectName = (location.state?.projectName || "Unknown Project") as string;
-
-    const [debugMode, setDebugMode] = useState(false);
+    const [debugMode, setDebugMode] = useState(true); // TEMP: Force debug mode
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [exportError, setExportError] = useState<string | null>(null);
 
-    // redirect if no state (MVP limitation)
-    if (!datasets || datasets.length === 0) {
+    // 1. Fetch data if missing in state
+    const { data, isLoading, error: fetchError, refetch } = useQuery({
+        queryKey: ["project", projectId],
+        queryFn: () => getProject(projectId!),
+        enabled: !!projectId && (!location.state?.datasets || location.state.datasets.length === 0),
+        initialData: location.state?.datasets?.length > 0 ? {
+            project: { id: projectId!, name: location.state.projectName },
+            datasets: location.state.datasets
+        } : undefined
+    });
+
+    const datasets = (data?.datasets || []) as Dataset[];
+    console.log("DEBUG: datasets", datasets);
+    const projectName = (data?.project?.name || location.state?.projectName || "Unknown Project") as string;
+
+    // 2. Template Status
+    const { data: templateStatus, refetch: refetchTemplate } = useQuery({
+        queryKey: ["template-status"],
+        queryFn: checkTemplateStatus,
+        refetchOnWindowFocus: true
+    });
+
+    const [templateFile, setTemplateFile] = useState<File | null>(null);
+    const [templateUploadError, setTemplateUploadError] = useState<string | null>(null);
+
+    const uploadMutation = useMutation({
+        mutationFn: uploadTemplate,
+        onSuccess: () => {
+            setTemplateFile(null);
+            setTemplateUploadError(null);
+            refetchTemplate();
+        },
+        onError: (err: any) => {
+            setTemplateUploadError(err.response?.data?.detail || "Upload failed");
+        }
+    });
+
+    // Loading state
+    if (isLoading) {
         return (
-            <div className="p-8 text-center">
-                <h2 className="text-xl font-bold">No project context found.</h2>
-                <Button onClick={() => navigate("/")} variant="secondary" className="mt-4">
-                    Return to Upload
-                </Button>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">
+                <div className="text-center space-y-4">
+                    <Spinner className="h-8 w-8 mx-auto" />
+                    <p className="text-sm text-gray-500">Loading project context...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!projectId) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8 text-center">
+                <div className="max-w-md space-y-4">
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+                    <h2 className="text-xl font-bold">Missing Project ID</h2>
+                    <p className="text-sm text-gray-500">
+                        No project ID provided in URL.
+                    </p>
+                    <Button onClick={() => navigate("/")} variant="secondary">
+                        Return to Upload
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // Error state
+    if (fetchError || (!isLoading && datasets.length === 0)) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8 text-center">
+                <div className="max-w-md space-y-4">
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+                    <h2 className="text-xl font-bold">No project context found.</h2>
+                    <p className="text-sm text-gray-500">
+                        We couldn't retrieve the data for project ID: <code className="bg-gray-100 px-1 rounded">{projectId}</code>
+                    </p>
+                    <div className="flex justify-center space-x-3">
+                        <Button onClick={() => navigate("/")} variant="secondary">
+                            Return to Upload
+                        </Button>
+                        <Button onClick={() => refetch()} variant="ghost">
+                            < RefreshCcw className="mr-2 h-4 w-4" /> Retry
+                        </Button>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -43,18 +117,36 @@ export default function DashboardPage() {
         const list: string[] = [];
 
         datasets.forEach(d => {
+            if (!d) return;
+
             // 1. Preview Check
             if (!d.preview || d.preview.length === 0) {
                 list.push(`[BLOCK] Dataset '${d.name}': Empty preview/data.`);
             }
 
-            // 2. Percent Column Check
-            if (PCT_REQUIRED_TYPES.includes(d.detected_type)) {
-                const hasPct = Object.keys(d.preview[0] || {}).some(k =>
-                    k.toLowerCase().includes("percent") || k.includes("%")
+            // 2. Percent Column Check (Profiler-aware)
+            const family = d.profile?.dataset_family || d.detected_type || "unknown";
+            const metricTypes = d.profile?.metric_types || {};
+
+            if (family && PCT_REQUIRED_TYPES.includes(family)) {
+                // Find column that profiler marked as percent
+                let percentCol = Object.keys(metricTypes).find(k => metricTypes[k] === "percent");
+
+                // Fallback to strict string scanning if profile information is absent
+                if (!percentCol && Object.keys(metricTypes).length === 0) {
+                    percentCol = Object.keys(d.preview?.[0] || {}).find(k =>
+                        k.toLowerCase().includes("percent") || k.includes("%")
+                    );
+                }
+
+                console.log(
+                    `[PREFLIGHT] Dataset: ${d.name} | Family: ${family} | ` +
+                    `MetricTypes: ${JSON.stringify(metricTypes)} | ` +
+                    `PercentCol: ${percentCol || "None"}`
                 );
-                if (!hasPct) {
-                    list.push(`[BLOCK] Dataset '${d.name}' (${d.detected_type}): Missing percent column.`);
+
+                if (!percentCol) {
+                    list.push(`[BLOCK] Dataset '${d.name}' (${family}): Missing percent column.`);
                 }
             }
         });
@@ -62,7 +154,16 @@ export default function DashboardPage() {
         return list;
     }, [datasets]);
 
-    const blockingErrors = issues.filter(i => i.startsWith("[BLOCK]"));
+    const blockingErrors = useMemo(() => {
+        const base = issues.filter(i => i.startsWith("[BLOCK]"));
+
+        if (templateStatus && !templateStatus.configured) {
+            base.push("[BLOCK] Missing Presentation Template: Upload a PPTX to continue.");
+        }
+
+        return base;
+    }, [issues, templateStatus]);
+
     const canExport = blockingErrors.length === 0;
 
 
@@ -155,13 +256,13 @@ export default function DashboardPage() {
                             </h3>
                         </CardHeader>
                         <CardContent className="p-4">
-                            {issues.length === 0 ? (
+                            {blockingErrors.length === 0 ? (
                                 <div className="text-green-600 flex items-center text-sm font-medium">
                                     <CheckCircle className="h-4 w-4 mr-2" /> All checks passed
                                 </div>
                             ) : (
                                 <ul className="space-y-2">
-                                    {issues.map((issue, idx) => {
+                                    {blockingErrors.map((issue, idx) => {
                                         const isBlock = issue.startsWith("[BLOCK]");
                                         return (
                                             <li key={idx} className={cn("text-xs flex items-start p-2 rounded", isBlock ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700")}>
@@ -172,6 +273,61 @@ export default function DashboardPage() {
                                     })}
                                 </ul>
                             )}
+                        </CardContent>
+                    </Card>
+
+                    {/* TEMPLATE PANEL */}
+                    <Card>
+                        <CardHeader className="bg-gray-50 border-b py-3 px-4">
+                            <h3 className="font-semibold text-sm uppercase tracking-wide text-gray-600">
+                                Presentation Template
+                            </h3>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-4">
+                            {templateStatus?.configured ? (
+                                <div className="p-2 bg-green-50 border border-green-100 rounded flex items-center text-xs text-green-700">
+                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    Template loaded via {templateStatus.source === 'env' ? 'Environment' : 'Direct Upload'}
+                                </div>
+                            ) : (
+                                <div className="p-2 bg-yellow-50 border border-yellow-100 rounded flex items-center text-xs text-yellow-700">
+                                    <AlertCircle className="h-4 w-4 mr-2" />
+                                    No template configured.
+                                </div>
+                            )}
+
+                            <div className="space-y-4">
+                                <div className="flex items-center space-x-2">
+                                    <input
+                                        type="file"
+                                        accept=".pptx"
+                                        className="hidden"
+                                        id="template-upload"
+                                        onChange={(e) => setTemplateFile(e.target.files?.[0] || null)}
+                                    />
+                                    <label
+                                        htmlFor="template-upload"
+                                        className="flex-1 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                                    >
+                                        <div className="text-center">
+                                            <Upload className="mx-auto h-6 w-6 text-gray-400" />
+                                            <span className="mt-2 block text-xs font-medium text-gray-900">
+                                                {templateFile ? templateFile.name : "Choose PPTX template"}
+                                            </span>
+                                        </div>
+                                    </label>
+                                    <Button
+                                        size="sm"
+                                        disabled={!templateFile || uploadMutation.isPending}
+                                        onClick={() => templateFile && uploadMutation.mutate(templateFile)}
+                                    >
+                                        {uploadMutation.isPending ? <Spinner className="h-4 w-4" /> : "Upload"}
+                                    </Button>
+                                </div>
+                                {templateUploadError && (
+                                    <p className="text-[10px] text-red-500">{templateUploadError}</p>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -234,14 +390,23 @@ export default function DashboardPage() {
                     </Card>
 
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 }
 
 
 function DatasetCard({ dataset }: { dataset: Dataset }) {
     const [expanded, setExpanded] = useState(false);
+
+    // Safeguard against malformed dataset objects
+    if (!dataset) return <div className="p-4 text-red-500 text-xs">Invalid Dataset</div>;
+
+    const typeLabel = (dataset.detected_type || "?").substring(0, 2).toUpperCase();
+    const rows = dataset.row_count || 0;
+    const cols = dataset.col_count || 0;
+    const typeName = dataset.detected_type || "Unknown";
+    const preview = dataset.preview || [];
 
     return (
         <Card className="overflow-hidden border transition-shadow hover:shadow-md">
@@ -251,12 +416,12 @@ function DatasetCard({ dataset }: { dataset: Dataset }) {
             >
                 <div className="flex items-center space-x-3 overflow-hidden">
                     <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">
-                        {dataset.detected_type.substring(0, 2).toUpperCase()}
+                        {typeLabel}
                     </div>
                     <div className="min-w-0">
-                        <h4 className="font-medium text-sm truncate" title={dataset.name}>{dataset.name}</h4>
+                        <h4 className="font-medium text-sm truncate" title={dataset.name}>{dataset.name || "Unnamed"}</h4>
                         <p className="text-xs text-gray-500">
-                            {dataset.row_count} rows • {dataset.col_count} cols • {dataset.detected_type}
+                            {rows} rows • {cols} cols • {typeName}
                         </p>
                     </div>
                 </div>
@@ -270,25 +435,28 @@ function DatasetCard({ dataset }: { dataset: Dataset }) {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="border-b">
-                                {Object.keys(dataset.preview[0] || {}).map((k) => (
+                                {Object.keys(preview[0] || {}).map((k) => (
                                     <th key={k} className="p-1 font-semibold text-gray-600">{k}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {dataset.preview.slice(0, 5).map((row, i) => (
+                            {preview.slice(0, 5).map((row, i) => (
                                 <tr key={i} className="border-b last:border-0 border-gray-200">
-                                    {Object.values(row).map((val: any, j) => (
+                                    {Object.values(row || {}).map((val: any, j) => (
                                         <td key={j} className="p-1 text-gray-700 truncate max-w-[150px]" title={String(val)}>
-                                            {String(val)}
+                                            {String(val ?? "")}
                                         </td>
                                     ))}
                                 </tr>
                             ))}
                         </tbody>
                     </table>
+                    {preview.length === 0 && (
+                        <div className="p-2 text-center text-gray-400 italic">No preview data available</div>
+                    )}
                     <div className="mt-2 text-gray-400 italic text-center">
-                        Showing first 5 rows
+                        Showing first {Math.min(preview.length, 5)} rows
                     </div>
                 </div>
             )}

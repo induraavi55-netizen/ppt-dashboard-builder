@@ -4,21 +4,28 @@ from pptx import Presentation
 from pathlib import Path
 
 def load_template():
-    
+    # Priority 1: Environment Variable
     path_str = os.environ.get("PPT_TEMPLATE_PATH")
+    template_path = None
     
-    if not path_str:
+    if path_str:
+        template_path = Path(path_str)
+        if template_path.exists():
+            print(f"[TEMPLATE] Using environment template: {template_path}")
+        else:
+            print(f"[TEMPLATE] WARNING: PPT_TEMPLATE_PATH set but file not found: {template_path}")
+            template_path = None
+
+    # Priority 2: Uploaded Fallback
+    if not template_path:
+        fallback_path = Path("templates/current_template.pptx")
+        if fallback_path.exists():
+            template_path = fallback_path
+            print(f"[TEMPLATE] Using uploaded template: {template_path}")
+    
+    if not template_path:
         raise RuntimeError(
-            "Configuration Error: PPT_TEMPLATE_PATH environment variable is not set. "
-            "Please configure this to point to the valid PowerPoint template file."
-        )
-
-    template_path = Path(path_str)
-
-    if not template_path.exists():
-        raise FileNotFoundError(
-            f"Template Error: The file specified in PPT_TEMPLATE_PATH does not exist.\n"
-            f"Path: {template_path}"
+            "No PPT template configured. Upload one from UI or set PPT_TEMPLATE_PATH."
         )
 
     try:

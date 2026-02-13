@@ -13,6 +13,11 @@ export interface Dataset {
     col_count: number;
     preview: Record<string, any>[];
     schema: any;
+    profile: {
+        type: string;
+        dataset_family: string;
+        metric_types: Record<string, string>;
+    };
 }
 
 export interface UploadResponse {
@@ -25,4 +30,16 @@ export interface ValidationRule {
     label: string;
     check: (datasets: Dataset[]) => boolean | string; // true if pass, string error if fail
     severity: "block" | "warn";
+}
+
+export interface PipelineJob {
+    id: string;
+    step_name: string;
+    status: "pending" | "running" | "completed" | "failed";
+    output_files: string[];
+    error_message?: string;
+    logs: string[];
+    created_at: string;
+    started_at?: string;
+    completed_at?: string;
 }

@@ -1,5 +1,7 @@
 print("USING CHART RENDERER FROM:", __file__)
 
+
+
 from pptx.enum.chart import XL_CHART_TYPE, XL_DATA_LABEL_POSITION
 from pptx.chart.data import ChartData
 from pptx.util import Pt
@@ -39,28 +41,102 @@ DEFAULT_BAR_COLOR = RGBColor(79, 129, 189)
 # --------------------------------------------------
 
 def detect_dataset_type(element):
+    """
+    Returns the classification for the dataset.
+    Prioritizes explicit 'datasetFamily' from the element metadata.
+    """
+    family = element.get("datasetFamily")
+    
+    # Do not trust generic family blindly
+    if family and family != "generic":
+        return family
+
 
     name = (element.get("datasetName") or "").lower()
 
-    if "sub_wise" in name:
+    if "sub_wise" in name or "subwise" in name:
         return "subwise"
 
-    if name.endswith("_lo"):
+    if name.endswith("_lo") or "learning_outcome" in name:
         return "lo"
 
-    if name.endswith("_qlvl"):
+    if name.endswith("_qlvl") or "difficulty" in name:
         return "qlvl"
 
-    if "reg_vs_part_grade" in name:
+    if "reg_vs_part_grade" in name or ("reg" in name and "part" in name and "grade" in name):
         return "reg_vs_part_grade"
 
-    if "reg_vs_part_schl" in name:
+    if "reg_vs_part_schl" in name or "reg_vs_part_school" in name:
         return "reg_vs_part_school"
 
     if "perf_summary" in name or "summary" in name:
         return "perf_summary"
 
     return "generic"
+
+
+# --------------------------------------------------
+# Percent column detection (NEW)
+# --------------------------------------------------
+
+def _detect_numeric_percent_column(columns, preview):
+    """
+    Fallback: find numeric column that looks like percent.
+    """
+    for c in columns:
+        vals = []
+        for r in preview:
+            try:
+                # Better 0-1 decimal handling
+                raw = str(r.get(c))
+                if "." in raw and float(raw) <= 1:
+                    v = int(round(float(raw) * 100))
+                else:
+                    v = normalize_percent(raw)
+                vals.append(v)
+            except Exception:
+                continue
+
+        if not vals:
+            continue
+
+        mn = min(vals)
+        mx = max(vals)
+
+        # Only treat as percent if the column name clearly indicates it
+        if 0 <= mn and mx <= 100:
+            name = c.lower()
+            if "%" in name or "percent" in name or "percentage" in name:
+                return c
+
+    return None
+
+
+def normalize_percent(val):
+    """
+    Centralized percent handling. Strips symbols, rounds to nearest integer.
+    """
+    try:
+        # Handle None or empty strings
+        if val is None or str(val).strip() == "":
+            return 0
+        # Strip % and common numeric decorators
+        clean_val = str(val).replace("%", "").replace("(", "").replace(")", "").strip()
+        return int(round(float(clean_val)))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _safe_count(val):
+    """
+    Safe numeric parser for counts. Rounds and strips junk characters.
+    """
+    try:
+        if val is None:
+            return 0
+        return int(round(float(str(val).replace("%", "").strip())))
+    except Exception:
+        return 0
 
 
 # --------------------------------------------------
@@ -106,9 +182,6 @@ def render_chart(ppt_slide, element, debug_mode: bool = False):
     chart_type = element.get("chartType")
     preview = element.get("preview") or []
 
-    # --------------------------------------------------
-    # VALIDATION
-    # --------------------------------------------------
     if not preview:
         raise ValueError(
             f"Chart Error: Dataset '{element.get('datasetName')}' has empty preview data. "
@@ -116,30 +189,57 @@ def render_chart(ppt_slide, element, debug_mode: bool = False):
         )
 
     dataset_type = detect_dataset_type(element)
+    metric_types = element.get("metricTypes") or {}
 
-
-
-
+    print(
+        f"[RENDERING] Dataset: {element.get('datasetName')} | "
+        f"Type: {dataset_type} | MetricTypes: {metric_types}"
+    )
 
     columns = list(preview[0].keys())
     label_col = columns[0]
 
-    percent_col = next(
-        (c for c in columns if "%" in c or "percent" in c.lower()),
-        None,
-    )
+    # --------------------------------------------------
+    # Percent column resolution (FIXED)
+    # --------------------------------------------------
+
+    # For reg_vs_part_grade, ONLY use schema-classified percent columns
+    if dataset_type == "reg_vs_part_grade":
+        percent_col = next(
+            (c for c in columns if metric_types.get(c) == "percent"),
+            None,
+        )
+    else:
+        percent_col = next(
+            (c for c in columns if metric_types.get(c) == "percent"),
+            None,
+        )
+
+        if not percent_col:
+            percent_col = _detect_numeric_percent_column(columns, preview)
+
+        if not percent_col:
+            percent_col = next(
+                (c for c in columns if "%" in c or "percent" in c.lower()),
+                None,
+            )
 
     # --------------------------------------------------
-    # VALIDATION: Percent Column
+    # VALIDATION
     # --------------------------------------------------
-    # Charts that strictly require a percent column for formatting
-    PCT_REQUIRED_TYPES = {"lo", "qlvl", "perf_summary", "subwise", "reg_vs_part_grade"}
-    
+
+    PCT_REQUIRED_TYPES = {
+        "lo",
+        "qlvl",
+        "perf_summary",
+        "subwise",
+    }
+
     if dataset_type in PCT_REQUIRED_TYPES and not percent_col:
         raise ValueError(
             f"Chart Error: Dataset '{element.get('datasetName')}' (type: {dataset_type}) "
-            "requires a percentage column (containing '%' or 'percent') but none was found "
-            f"in columns: {columns}"
+            "requires a percentage column but none was detected. "
+            f"Found columns: {columns}"
         )
 
     # --------------------------------------------------
@@ -147,16 +247,39 @@ def render_chart(ppt_slide, element, debug_mode: bool = False):
     # --------------------------------------------------
 
     if dataset_type == "reg_vs_part_grade":
-        metric_cols = [c for c in columns[1:] if c != percent_col]
+        # Only include count columns as bars. ignore Participation %
+        metric_cols = [
+            c for c in columns
+            if metric_types.get(c) in ("registered", "participated")
+        ]
+        print(f"[DEBUG] reg_vs_part_grade DETECTED. metric_cols={metric_cols}")
 
     elif dataset_type in ("lo", "qlvl", "perf_summary", "subwise"):
         metric_cols = [percent_col] if percent_col else []
+        if dataset_type == "subwise":
+            print(f"[DEBUG] subwise DETECTED. metric_cols={metric_cols}")
+        if not metric_cols and columns[1:]:
+             # Last resort for percent types, but avoid Participation % if possible
+             metric_cols = [columns[1]]
 
     else:
         metric_cols = columns[1:]
 
-    if not metric_cols:
+    print(f"DATASET TYPE = {dataset_type}")
+    print(f"METRIC_COLS = {metric_cols}")
+
+    # Remove dynamic fallback for reg_vs_part_grade to ensure only counts are plotted
+    if not metric_cols and dataset_type != "reg_vs_part_grade":
         metric_cols = columns[1:]
+
+    print(f"[PRE-GUARD] dataset_type={dataset_type}, metric_cols={metric_cols}, percent_col={percent_col}")
+
+    # FINAL GUARD: reg_vs_part charts must NEVER plot percent series
+    if dataset_type == "reg_vs_part_grade" and percent_col in metric_cols:
+        metric_cols = [c for c in metric_cols if c != percent_col]
+        print(f"[GUARD] Removed percent column '{percent_col}' from metric_cols. Final: {metric_cols}")
+
+
 
     chart_data = ChartData()
 
@@ -196,11 +319,23 @@ def render_chart(ppt_slide, element, debug_mode: bool = False):
 
     for col in metric_cols:
         vals = []
+        is_pct = (col == percent_col) or (metric_types.get(col) == "percent")
+        
+        if dataset_type == "subwise":
+            print("[SUBWISE] forcing percent-only plotting")
+
         for r in preview:
-            try:
-                vals.append(float(r.get(col)))
-            except Exception:
-                vals.append(0)
+            raw_val = r.get(col)
+            # Force normalization for subwise OR if identified as percent
+            if dataset_type == "subwise" or is_pct:
+                vals.append(normalize_percent(raw_val))
+            elif dataset_type == "reg_vs_part_grade":
+                vals.append(_safe_count(raw_val))
+            else:
+                try:
+                    vals.append(float(str(raw_val).replace("%", "")))
+                except Exception:
+                    vals.append(0)
         chart_data.add_series(col, vals)
 
     pptx_chart_type = CHART_MAP.get(chart_type, XL_CHART_TYPE.COLUMN_CLUSTERED)
@@ -213,14 +348,23 @@ def render_chart(ppt_slide, element, debug_mode: bool = False):
         h,
         chart_data,
     ).chart
-   
+
+    print(f"SERIES IN CHART = {[s.name for s in chart.series]}")
 
     chart.has_title = False
 
     plot = chart.plots[0]
-    
-    
- 
+
+    # FORCE percent axis formatting when metric is percent
+    if dataset_type in ("perf_summary", "summary", "lo", "qlvl"):
+        val_axis = chart.value_axis
+        val_axis.minimum_scale = 0.0
+        val_axis.maximum_scale = 100.0
+        val_axis.major_unit = 20.0
+
+        plot.has_data_labels = True
+        labels = plot.data_labels
+        labels.number_format = '0"%"'
 
     # --------------------------------------------------
     # Dispatch formatting
@@ -241,18 +385,56 @@ def render_chart(ppt_slide, element, debug_mode: bool = False):
     elif dataset_type == "subwise":
         _format_subwise(chart, plot)
 
+    elif any(metric_types.get(c) == "percent" for c in metric_cols):
+        _format_perf_summary(chart, plot)
     else:
         _format_generic(chart, plot)
 
     _apply_bar_colors(chart)
 
-    # --------------------------------------------------
-    # DEBUG OVERLAY
-    # --------------------------------------------------
-    # We check env var here too in case called directly without slide_builder wrapper,
-    # but primarily respect the passed debug_mode.
     if debug_mode or os.environ.get("EXPORT_DEBUG") == "true":
         _render_debug_overlay(ppt_slide, x, y, w, h, element, dataset_type)
+
+
+# --------------------------------------------------
+# PIE BUILDER
+# --------------------------------------------------
+
+def _build_pie_chart(
+    ppt_slide,
+    x,
+    y,
+    w,
+    h,
+    chart_data,
+    preview,
+    label_col,
+    metric_cols,
+):
+
+    cats = []
+    vals = []
+
+    metric = metric_cols[0]
+
+    for r in preview:
+        cats.append(str(r.get(label_col)))
+        # ALWAYS use normalize_percent for PIE as they are essentially distributions/percentages
+        vals.append(normalize_percent(r.get(metric)))
+
+    chart_data.categories = cats
+    chart_data.add_series(metric, vals)
+
+    chart = ppt_slide.shapes.add_chart(
+        XL_CHART_TYPE.PIE,
+        x,
+        y,
+        w,
+        h,
+        chart_data,
+    ).chart
+
+    return chart
 
 
 # --------------------------------------------------
@@ -273,8 +455,6 @@ def _format_pie(chart):
     labels.position = XL_DATA_LABEL_POSITION.OUTSIDE_END
 
     chart.has_legend = False
-    
-
 
 
 # ---------------- GRADE WISE -----------------------
@@ -291,15 +471,21 @@ def _format_reg_vs_part_grade(chart, plot, preview, percent_col):
     cat_axis.tick_labels.font.size = Pt(10)
     val_axis.tick_labels.font.size = Pt(10)
 
-    val_axis.minimum_scale = 0
+    val_axis.minimum_scale = 0.0
 
+    # Use only count series (Registered, Participated) for axis scaling, NEVER Participation %
+    series_names = [s.name for s in chart.series if s.name != percent_col]
+    if not series_names:
+        series_names = [s.name for s in chart.series]
+
+    # STICK TO COUNTS: Ignore percent columns entirely for axis calculation
     max_val = max(
-        max(float(r.get(col) or 0) for r in preview)
-        for col in [s.name for s in chart.series]
+        max(_safe_count(r.get(col)) for r in preview)
+        for col in series_names
     )
 
-    val_axis.maximum_scale = math.ceil(max_val / 50) * 50
-    val_axis.major_unit = 50
+    val_axis.maximum_scale = float(math.ceil(max_val / 50) * 50)
+    val_axis.major_unit = 50.0
 
     # Remove global plot-level label settings to handle per-series
     plot.has_data_labels = False
@@ -323,37 +509,26 @@ def _format_reg_vs_part_grade(chart, plot, preview, percent_col):
         for p_idx, point in enumerate(series.points):
 
             dl = point.data_label
-            # Re-apply position/font to point if needed, but series level should suffice.
-            # However, accessing text_frame often resets some props, so be careful.
             
             tf = dl.text_frame
             tf.clear()
 
             p = tf.paragraphs[0]
-            # Inherit series font size (or set explicitly if cleared)
             p.font.size = Pt(9)
             p.font.bold = True
-            
-            # Ensure color persists after text update
-            if series.name.lower().startswith("participated"):
-                p.font.color.rgb = RGBColor(0, 0, 0)
-            else:
-                p.font.color.rgb = RGBColor(0, 0, 0)
+            p.font.color.rgb = RGBColor(0, 0, 0)
 
             value = series.values[p_idx]
             raw = preview[p_idx].get(percent_col)
 
-            try:
-                percent = round(
-                    float(str(raw).replace("%", "").replace("(", "").replace(")", ""))
-                )
-            except Exception:
-                percent = raw
+            # FORCE normalized integer % for reg_vs_part labels
+            percent = normalize_percent(raw)
 
             if series.name.lower().startswith("participated"):
-                p.text = f"{int(value)}\n({percent}%)"
+                # Ensure no decimals in the label text - format as count(percentage%)
+                p.text = f"{int(round(value))}({percent}%)"
             else:
-                p.text = f"{int(value)}"
+                p.text = f"{int(round(value))}"
 
     _set_axis_titles(chart, "Grade", "Students")
 
@@ -370,9 +545,9 @@ def _format_lo(chart, plot):
     cat_axis.tick_labels.font.size = Pt(9)
     
     val_axis.tick_labels.font.size = Pt(9)
-    val_axis.minimum_scale = 0
-    val_axis.maximum_scale = 100
-    val_axis.major_unit = 20
+    val_axis.minimum_scale = 0.0
+    val_axis.maximum_scale = 100.0
+    val_axis.major_unit = 20.0
 
     plot.has_data_labels = True
     labels = plot.data_labels
@@ -393,9 +568,9 @@ def _format_qlvl(chart, plot):
     cat_axis.tick_labels.font.size = Pt(12)
     
 
-    val_axis.minimum_scale = 0
-    val_axis.maximum_scale = 100
-    val_axis.major_unit = 20
+    val_axis.minimum_scale = 0.0
+    val_axis.maximum_scale = 100.0
+    val_axis.major_unit = 20.0
 
     plot.has_data_labels = True
     labels = plot.data_labels
@@ -414,9 +589,9 @@ def _format_perf_summary(chart, plot):
 
     cat_axis.tick_labels.font.size = Pt(12)
 
-    val_axis.minimum_scale = 0
-    val_axis.maximum_scale = 100
-    val_axis.major_unit = 20
+    val_axis.minimum_scale = 0.0
+    val_axis.maximum_scale = 100.0
+    val_axis.major_unit = 20.0
 
     plot.has_data_labels = True
     labels = plot.data_labels
@@ -427,16 +602,16 @@ def _format_perf_summary(chart, plot):
 
 
 def _format_subwise(chart, plot):
-
+    print("SUBWISE FORMAT APPLIED")
     plot.gap_width = 180
 
     cat_axis = chart.category_axis
-    
-
     val_axis = chart.value_axis
-    val_axis.minimum_scale = 0
-    val_axis.maximum_scale = 100
-    val_axis.major_unit = 20
+
+    # CONTRACT: Subwise charts are always 0-100%
+    val_axis.minimum_scale = 0.0
+    val_axis.maximum_scale = 100.0
+    val_axis.major_unit = 20.0
 
     plot.has_data_labels = True
     labels = plot.data_labels
@@ -470,73 +645,6 @@ def _apply_bar_colors(chart):
             fill.fore_color.rgb = DEFAULT_BAR_COLOR
 
 
-def _build_pie_chart(
-    ppt_slide,
-    x,
-    y,
-    w,
-    h,
-    chart_data,
-    preview,
-    label_col,
-    metric_cols,
-):
-
-    cats = []
-    vals = []
-
-    for r in preview:
-        cats.append(str(r.get(label_col)))
-        try:
-            vals.append(float(r.get(metric_cols[0])))
-        except Exception:
-            vals.append(0)
-
-    chart_data.categories = cats
-    chart_data.add_series(metric_cols[0], vals)
-    
-
-    chart= ppt_slide.shapes.add_chart(
-        XL_CHART_TYPE.PIE,
-        x,
-        y,
-        w,
-        h,
-        chart_data,
-    ).chart
-    
-
-   
-
-    return chart
-
-
-# --------------------------------------------------
-# FALLBACK
-# --------------------------------------------------
-
-def _render_placeholder(ppt_slide, x, y, w, h, chart_type):
-
-    shape = ppt_slide.shapes.add_shape(
-        MSO_SHAPE.RECTANGLE,
-        x,
-        y,
-        w,
-        h,
-    )
-
-    shape.fill.background()
-    shape.line.width = Pt(1.5)
-
-    tf = shape.text_frame
-    tf.clear()
-
-    p = tf.paragraphs[0]
-    p.text = f"{chart_type.upper()} CHART\n(no preview data)"
-    p.font.size = Pt(12)
-    p.alignment = PP_ALIGN.CENTER
-
-
 def _set_axis_titles(chart, x_title=None, y_title=None):
 
     if x_title and chart.category_axis:
@@ -568,7 +676,6 @@ def _render_debug_overlay(ppt_slide, x, y, w, h, element, dataset_type):
     """
     Renders a semi-transparent text box inside the chart area with debug info.
     """
-    # Small offset
     padding = px_to_emu(10)
     
     box = ppt_slide.shapes.add_textbox(
@@ -578,13 +685,11 @@ def _render_debug_overlay(ppt_slide, x, y, w, h, element, dataset_type):
         px_to_emu(60)
     )
     
-    # Yellow background, semi-transparent
     fill = box.fill
     fill.solid()
     fill.fore_color.rgb = RGBColor(255, 255, 204)
     fill.transparency = 0.2
     
-    # Border
     line = box.line
     line.color.rgb = RGBColor(255, 0, 0)
     line.width = Pt(1)
@@ -605,3 +710,4 @@ def _render_debug_overlay(ppt_slide, x, y, w, h, element, dataset_type):
         f"Type: {dataset_type} ({chart_type})"
     )
     p.text = text
+

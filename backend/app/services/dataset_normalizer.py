@@ -59,7 +59,7 @@ def normalize_dataset(df: pd.DataFrame, schema: dict) -> pd.DataFrame:
         return df
 
     # ---------------------------------------------
-    # Detect percent-only metric sets
+    # Detect and clean percent metric sets
     # ---------------------------------------------
 
     percent_metrics = []
@@ -71,6 +71,18 @@ def normalize_dataset(df: pd.DataFrame, schema: dict) -> pd.DataFrame:
         )
         if meta.get("is_percent"):
             percent_metrics.append(m)
+            
+            # Implementation: Strip % and coerce to float
+            if m in df.columns:
+                df[m] = (
+                    df[m]
+                    .astype(str)
+                    .str.replace("%", "", regex=False)
+                    .str.replace("(", "", regex=False)
+                    .str.replace(")", "", regex=False)
+                )
+                df[m] = pd.to_numeric(df[m], errors="coerce")
+
 
     # ---------------------------------------------
     # Conservative melting rules

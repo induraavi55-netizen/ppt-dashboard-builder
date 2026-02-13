@@ -80,7 +80,9 @@ def pick_rule(profile: dict):
                 break
 
         if ok:
-            return rule.get("then", {})
+            then = rule.get("then", {})
+            print(f"[VALIDATED] Rule Match: {rule.get('name', 'unnamed')} -> Chart: {then.get('chart')}")
+            return then
 
     # safe default
     return {"chart": "column"}

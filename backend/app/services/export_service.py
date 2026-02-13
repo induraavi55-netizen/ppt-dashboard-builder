@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset
+from app.services.dataset_profiler import profile_dataset
 from app.services.ppt.slide_builder import build_ppt_from_slides
 
 
@@ -27,6 +28,11 @@ def export_project_to_ppt(project, slides, db: Session, debug_mode: bool = False
             "preview": d.preview,
             "schema": d.schema,
             "name": d.name,
+            "profile": profile_dataset({
+                "name": d.name,
+                "schema": d.schema,
+                "preview": d.preview
+            })
         }
         for d in datasets
     }
@@ -57,6 +63,8 @@ def export_project_to_ppt(project, slides, db: Session, debug_mode: bool = False
             el["preview"] = dataset_info["preview"]
             el["schema"] = dataset_info["schema"]
             el["datasetName"] = dataset_info["name"]
+            el["metricTypes"] = dataset_info["profile"].get("metric_types")
+            el["datasetFamily"] = dataset_info["profile"].get("dataset_family")
 
     # -----------------------------------
     # Build PPTX

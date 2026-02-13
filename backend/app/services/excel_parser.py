@@ -94,17 +94,20 @@ def looks_like_pivot(df: pd.DataFrame) -> bool:
 
     df = df.dropna(axis=1, how="all")
 
-    if df.shape[0] < 2 or df.shape[1] < 2:
+    if df.shape[0] < 1 or df.shape[1] < 2:
+        print(f" [PivotDetector] REJECTING {df.shape}: Too small")
         return False
 
     numeric_cols = df.select_dtypes(include="number").columns
     text_cols = df.select_dtypes(include="object").columns
 
     if len(numeric_cols) == 0:
+        print(f" [PivotDetector] REJECTING: No numeric columns. Cols: {df.columns.tolist()}")
         return False
 
     # admin sheets usually have tons of identifiers
     if len(text_cols) > 8:
+        print(f" [PivotDetector] REJECTING: Too many text cols ({len(text_cols)})")
         return False
 
     return True
@@ -115,16 +118,15 @@ def looks_like_pivot(df: pd.DataFrame) -> bool:
 # --------------------------------------------------
 
 def detect_merged_sheets(path: str) -> set[str]:
-
     wb = openpyxl.load_workbook(path, data_only=True)
-
-    merged = set()
-
-    for ws in wb.worksheets:
-        if ws.merged_cells.ranges:
-            merged.add(ws.title)
-
-    return merged
+    try:
+        merged = set()
+        for ws in wb.worksheets:
+            if ws.merged_cells.ranges:
+                merged.add(ws.title)
+        return merged
+    finally:
+        wb.close()
 
 
 # --------------------------------------------------
@@ -141,58 +143,60 @@ async def parse_excel(file):
 
     merged_sheets = detect_merged_sheets(path)
 
-    xls = pd.ExcelFile(path)
-
     datasets = []
+    
+    with pd.ExcelFile(path) as xls:
+        for sheet in xls.sheet_names:
+            # ----------------------------------
+            # Skip merged-cell sheets
+            # ----------------------------------
+            if sheet in merged_sheets:
+                continue
 
-    for sheet in xls.sheet_names:
+            df = xls.parse(sheet, header=0)
 
-        # ----------------------------------
-        # Skip merged-cell sheets
-        # ----------------------------------
-        if sheet in merged_sheets:
-            continue
+            df = _clean_dataframe(df)
 
-        df = xls.parse(sheet, header=0)
+            # ----------------------------------
+            # Normalize percent-like columns early
+            # ----------------------------------
+            df = _coerce_percent_columns(df)
 
-        df = _clean_dataframe(df)
+            df = _drop_text_metric_columns(df)
 
-        # ----------------------------------
-        # Normalize percent-like columns early
-        # ----------------------------------
-        df = _coerce_percent_columns(df)
+            # ----------------------------------
+            # Skip admin / non-pivot sheets
+            # ----------------------------------
+            print(f" [ExcelParser] Checking sheet '{sheet}'...")
+            if not looks_like_pivot(df):
+                print(f" [ExcelParser] SKIPPING '{sheet}' (not a pivot)")
+                continue
+            
+            print(f" [ExcelParser] ACCEPTED '{sheet}'")
 
-        df = _drop_text_metric_columns(df)
+            schema = detect_schema(df)
 
-        # ----------------------------------
-        # Skip admin / non-pivot sheets
-        # ----------------------------------
-        if not looks_like_pivot(df):
-            continue
+            # ----------------------------------
+            # REG VS PART MUST STAY WIDE
+            # ----------------------------------
+            if sheet.startswith("reg_vs_part"):
+                normalized = df.copy()
+            else:
+                normalized = normalize_dataset(df, schema)
 
-        schema = detect_schema(df)
+            # ----------------------------------
+            # JSON-safe
+            # ----------------------------------
+            normalized = _sanitize_for_json(normalized)
 
-        # ----------------------------------
-        # REG VS PART MUST STAY WIDE
-        # ----------------------------------
-        if sheet.startswith("reg_vs_part"):
-            normalized = df.copy()
-        else:
-            normalized = normalize_dataset(df, schema)
-
-        # ----------------------------------
-        # JSON-safe
-        # ----------------------------------
-        normalized = _sanitize_for_json(normalized)
-
-        datasets.append(
-            {
-                "name": sheet,
-                "columns": normalized.columns.tolist(),
-                "rows": len(normalized),
-                "schema": schema,
-                "preview": normalized.to_dict(orient="records"),
-            }
-        )
+            datasets.append(
+                {
+                    "name": sheet,
+                    "columns": normalized.columns.tolist(),
+                    "rows": len(normalized),
+                    "schema": schema,
+                    "preview": normalized.to_dict(orient="records"),
+                }
+            )
 
     return datasets

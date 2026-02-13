@@ -99,7 +99,16 @@ def profile_dataset(dataset: dict):
     # Classify metrics
     # --------------------------------------------------
 
-    metric_types = {m: classify_metric(m) for m in metrics}
+    # --------------------------------------------------
+    # Classify metrics
+    # --------------------------------------------------
+
+    preview = dataset.get("preview") or []
+    metric_types = {}
+    
+    for m in metrics:
+        vals = [r.get(m) for r in preview] if preview else None
+        metric_types[m] = classify_metric(m, vals)
 
     # --------------------------------------------------
     # Special cases
@@ -121,6 +130,7 @@ def profile_dataset(dataset: dict):
 
     # LO / QLVL MUST be percent based
     if family in ("lo", "qlvl"):
+        # filter metrics to only those that can be percents
         metrics = [
             m for m in metrics
             if metric_types.get(m) == "percent"
@@ -130,18 +140,18 @@ def profile_dataset(dataset: dict):
 
         metric_types = {m: "percent" for m in metrics}
 
-    # perf summary is percent by definition
-    if family == "perf_summary":
-        metric_types = {m: "percent" for m in metrics}
-
     # --------------------------------------------------
     # Dataset type
     # --------------------------------------------------
 
     dataset_type = (
-        "percent"
-        if any(t == "percent" for t in metric_types.values())
-        else "count"
+        "count"
+        if special_case == "reg_vs_part"
+        else (
+            "percent"
+            if any(t == "percent" for t in metric_types.values())
+            else "count"
+        )
     )
 
     return {

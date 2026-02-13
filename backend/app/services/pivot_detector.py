@@ -43,26 +43,22 @@ def _looks_textual(name: str) -> bool:
 # PERCENT DETECTOR
 # --------------------------------------------------
 
+from app.services.metric_classifier import classify_metric
+
 def detect_percent_metric(series: pd.Series, name: str) -> bool:
+    n = name.lower()
 
-    name_l = name.lower()
-
-    header_hint = any(w in name_l for w in PERCENT_HINTS)
-
-    vals = pd.to_numeric(series, errors="coerce").dropna()
-
-    if len(vals) == 0:
-        return False
-
-    # true ratios 0–1
-    if vals.max() <= 1.0:
+    if "%" in n or "percent" in n or "percentage" in n:
         return True
 
-    # classic percent range
-    if vals.max() <= 100 and vals.min() >= 0:
+    s = pd.to_numeric(series, errors="coerce").dropna()
+
+    if not s.empty and s.max() <= 1.0 and s.min() >= 0.0:
         return True
 
-    return header_hint
+    return False
+
+
 
 
 # --------------------------------------------------

@@ -44,12 +44,17 @@ def export_project(
     if not slides:
         raise HTTPException(status_code=400, detail="No slides to export")
 
-    ppt_path = export_project_to_ppt(
-        project=project,
-        slides=slides,
-        db=db,
-        debug_mode=debug_mode,
-    )
+    try:
+        ppt_path = export_project_to_ppt(
+            project=project,
+            slides=slides,
+            db=db,
+            debug_mode=debug_mode,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
     return FileResponse(
         ppt_path,

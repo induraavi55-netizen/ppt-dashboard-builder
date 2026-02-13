@@ -15,6 +15,8 @@ from app.schemas.api import (
 )
 
 from app.services.slide_generator import generate_slides
+from app.services.dataset_profiler import profile_dataset
+from app.services.dataset_service import detect_dataset_type_from_name
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -99,14 +101,17 @@ def load_project(project_id: str, db: Session = Depends(get_db)):
 
     uuid.UUID(project_id)
 
+    print(f" [Project] Loading project {project_id}")
     project = db.query(Project).filter(Project.id == project_id).first()
 
     if not project:
+        print(f" [Project] Project {project_id} NOT FOUND")
         raise HTTPException(status_code=404, detail="Project not found")
 
     datasets = db.query(Dataset).filter(
         Dataset.project_id == project_id
     ).all()
+    print(f" [Project] Found {len(datasets)} datasets for project {project_id}")
 
     slides = (
         db.query(Slide)
@@ -124,6 +129,14 @@ def load_project(project_id: str, db: Session = Depends(get_db)):
             {
                 "id": str(d.id),
                 "name": d.name,
+                "detected_type": detect_dataset_type_from_name(d.name),
+                "profile": profile_dataset({
+                    "name": d.name,
+                    "schema": d.schema,
+                    "preview": d.preview
+                }),
+                "row_count": d.row_count,
+                "col_count": len(d.columns),
                 "columns": d.columns,
                 "schema": d.schema,
                 "preview": d.preview,

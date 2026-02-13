@@ -1,7 +1,7 @@
 import os
 from pptx.util import Pt
 from pptx.enum.text import PP_ALIGN
-from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 
 
 from app.services.ppt.template_loader import load_template
@@ -66,20 +66,15 @@ def build_ppt_from_slides(project, slides, output_path, debug_mode: bool = False
         slide_json = slide.slide_json
         
         # -----------------------------
-        # VALIDATION (Hard Failure)
+        # VALIDATION (Soft)
         # -----------------------------
-        if not slide_json.get("width") or not slide_json.get("height"):
-             # Technically PPTX template drives this, but if the slide JSON implies
-             # a specific layout intent that's missing, we should know. 
-             # Actually, for elements, let's enforce validation there.
-             raise ValueError("Slide JSON is missing 'width' or 'height'")
 
         if not slide_json.get("elements"):
-            # Empty slide is suspicious but not necessarily fatal? 
-            # Reqs say "slide JSON missing width/height". 
-            # But the slide dimensions come from template generally.
-            # I will check if elements are valid.
             raise ValueError("Slide JSON has no elements. Aborting export.")
+
+        # NOTE:
+        # Slide dimensions are driven by the PPT template.
+        # Do NOT require width/height at slide level.
 
         # Always create new slide to ensure clean state
         ppt_slide = prs.slides.add_slide(base_layout)

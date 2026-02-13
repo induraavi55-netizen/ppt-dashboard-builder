@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 from uuid import UUID
 
@@ -12,7 +12,7 @@ class DatasetOut(BaseModel):
     id: UUID
     name: str
     columns: list
-    schema: Dict[str, Any]
+    data_schema: Dict[str, Any] = Field(..., alias="schema")
     preview: list
 
 

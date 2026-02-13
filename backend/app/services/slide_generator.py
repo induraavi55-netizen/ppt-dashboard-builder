@@ -129,6 +129,8 @@ def generate_slides(project_id: str, datasets: List[Dict]) -> List[Dict]:
                     "type": "chart",
                     "chartType": decision["chart"],
                     "datasetName": base_name,
+                    "datasetFamily": profile.get("dataset_family"),
+                    "metricTypes": profile.get("metric_types"),
                     "preview": preview,
                     "schema": {},
                     "x": 80,
@@ -205,11 +207,15 @@ def generate_slides(project_id: str, datasets: List[Dict]) -> List[Dict]:
             "fontSize": 24,
         })
 
+        print(f"[PROFILE] Dataset: {d['name']} | Family: {profile['dataset_family']} | Types: {profile['metric_types']}")
+
         elements.append({
             "id": new_id(),
             "type": "chart",
             "chartType": decision.get("chart", "column"),
             "datasetName": base_name,
+            "datasetFamily": profile.get("dataset_family"),
+            "metricTypes": profile.get("metric_types"),
             "preview": local_dataset.get("preview"),
             "schema": local_dataset.get("schema"),
             "x": 80,

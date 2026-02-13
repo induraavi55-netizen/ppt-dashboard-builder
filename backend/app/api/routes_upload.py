@@ -7,6 +7,8 @@ from app.models.project import Project
 from app.models.dataset import Dataset
 from app.services.slide_generator import generate_slides
 from app.models.slide import Slide
+from app.services.dataset_profiler import profile_dataset
+from app.services.dataset_service import detect_dataset_type_from_name
 
 
 router = APIRouter(prefix="/upload-data", tags=["upload"])
@@ -38,6 +40,10 @@ async def upload_data(
 
     dataset_outputs = []
     ids = []
+
+    print(f" [Upload] Extracted {len(datasets)} datasets from file.")
+    if len(datasets) == 0:
+        print(" [Upload] WARNING: No datasets found! Dashboard will be empty.")
 
     # -------------------
     # SAVE DATASETS
@@ -82,8 +88,27 @@ async def upload_data(
 
     db.commit()
 
-    return {
-        "project_id": project.id,
-        "dataset_ids": ids,
+    response_payload = {
+        "project_id": str(project.id),
+        "projectName": project.name,
+        "datasets": [
+            {
+                "id": str(d["id"]),
+                "name": d["name"],
+                "detected_type": detect_dataset_type_from_name(d["name"]),
+                "profile": profile_dataset({
+                    "name": d["name"],
+                    "schema": d["schema"],
+                    "preview": d["preview"]
+                }),
+                "row_count": len(d["preview"]),
+                "col_count": len(d["columns"]),
+                "preview": d["preview"],
+                "schema": d["schema"]
+            }
+            for d in dataset_outputs
+        ],
         "slides_created": len(slides),
     }
+    print(f" [Upload] Returning success. Project: {project.id}, Datasets: {len(dataset_outputs)}")
+    return response_payload

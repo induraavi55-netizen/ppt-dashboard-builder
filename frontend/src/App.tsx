@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import UploadPage from "./pages/UploadPage";
 import DashboardPage from "./pages/DashboardPage";
+import AnalysisPipelinePage from "./pages/AnalysisPipelinePage";
 
 const queryClient = new QueryClient();
 
@@ -12,7 +13,8 @@ function App() {
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
           <Routes>
             <Route path="/" element={<UploadPage />} />
-            <Route path="/dashboard/:projectId" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/analysis-pipeline" element={<AnalysisPipelinePage />} />
           </Routes>
         </div>
       </BrowserRouter>
