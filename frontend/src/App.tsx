@@ -12,9 +12,9 @@ function App() {
       <BrowserRouter>
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
           <Routes>
-            <Route path="/" element={<UploadPage />} />
+            <Route path="/" element={<AnalysisPipelinePage />} />
+            <Route path="/upload" element={<UploadPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/analysis-pipeline" element={<AnalysisPipelinePage />} />
           </Routes>
         </div>
       </BrowserRouter>
