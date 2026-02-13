@@ -6,7 +6,7 @@ import { exportProject, getProject, checkTemplateStatus, uploadTemplate } from "
 import { Button } from "../components/ui/Button";
 import { Card, CardHeader, CardContent } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
-import { AlertCircle, CheckCircle, FileText, Download, RefreshCcw, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle, FileText, Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export default function DashboardPage() {
@@ -20,7 +20,7 @@ export default function DashboardPage() {
     const [exportError, setExportError] = useState<string | null>(null);
 
     // 1. Fetch data if missing in state
-    const { data, isLoading, error: fetchError, refetch } = useQuery({
+    const { data, isLoading, error: fetchError } = useQuery({
         queryKey: ["project", projectId],
         queryFn: () => getProject(projectId!),
         enabled: !!projectId && (!location.state?.datasets || location.state.datasets.length === 0),
@@ -91,16 +91,13 @@ export default function DashboardPage() {
             <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8 text-center">
                 <div className="max-w-md space-y-4">
                     <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-                    <h2 className="text-xl font-bold">No project context found.</h2>
+                    <h2 className="text-xl font-bold">Project Not Found.</h2>
                     <p className="text-sm text-gray-500">
-                        We couldn't retrieve the data for project ID: <code className="bg-gray-100 px-1 rounded">{projectId}</code>
+                        The project ID might be invalid or the database was reset. Please upload your data again.
                     </p>
                     <div className="flex justify-center space-x-3">
-                        <Button onClick={() => navigate("/")} variant="secondary">
-                            Return to Upload
-                        </Button>
-                        <Button onClick={() => refetch()} variant="ghost">
-                            < RefreshCcw className="mr-2 h-4 w-4" /> Retry
+                        <Button onClick={() => navigate("/")} variant="primary">
+                            Back to Upload
                         </Button>
                     </div>
                 </div>
