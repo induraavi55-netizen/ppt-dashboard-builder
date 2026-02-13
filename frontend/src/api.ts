@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Access Vite env var or default to localhost
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "https://ppt-dashboard-builder.onrender.com";
 
 const api = axios.create({
     baseURL: API_URL,
