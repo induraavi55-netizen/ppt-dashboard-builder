@@ -1,150 +1,122 @@
 import pandas as pd
-from pathlib import Path
+from app.services.pipeline_state import get_pipeline_state, update_pipeline_state
+from app.utils.excel_export import export_snapshot
 from app.core.logging_utils import JobLogger
 
-DATA_DIR = Path("data")   # folder with Grade_7.xlsx, Grade_8.xlsx, etc.
+def run_step4():
+    JobLogger.log("Starting Step 4 (In-Memory)...")
+    
+    state = get_pipeline_state()
+    # Input: step1 data (contains updated _formatted sheets with Performance %)
+    step1_data = state.get("step1", {})
+    
+    if not step1_data:
+        JobLogger.log("Error: Step 1 data not found for Step 4. Check if Step 1 ran successfully.")
+        return
 
-# --------------------------------------------------
-# STEP 1: COLLECT *_formatted SHEETS
-# --------------------------------------------------
+    # Initialize step4 state
+    # Structure:
+    # {
+    #    "SubjectName": { "Grade X": df, "ALL_GRADES": df },
+    #    "master": { "all_grades_Subject": df, "Perf_summary": df }
+    # }
+    state["step4"] = {}
+    state["step4"]["master"] = {}
 
-subject_buckets = {}
+    # --------------------------------------------------
+    # STEP 1: COLLECT *_formatted SHEETS
+    # --------------------------------------------------
+    
+    subject_buckets = {}
 
-for file_path in DATA_DIR.glob("*.xlsx"):
+    for filename, sheets_dict in step1_data.items():
+        file_stem = filename.replace(".xlsx", "") # Approximation or use Path(filename).stem logic if strictly needed, but keys are usually filenames
 
-    file_stem = file_path.stem   # Grade_7
+        for sheet_name, df in sheets_dict.items():
+            sheet_clean = sheet_name.strip().lower()
+            
+            if sheet_clean.endswith("_formatted"):
+                base_subject = sheet_clean.replace("_formatted", "")
+                
+                # Check if df is valid
+                if df is None or df.empty:
+                    continue
 
-    xls = pd.ExcelFile(file_path)
+                subject_buckets.setdefault(base_subject, []).append(
+                    (file_stem, df)
+                )
 
-    for sheet in xls.sheet_names:
-
-        sheet_clean = sheet.strip().lower()
-
-        if sheet_clean.endswith("_formatted"):
-
-            base_subject = sheet_clean.replace("_formatted", "")
-
-            df = pd.read_excel(file_path, sheet_name=sheet)
-
-            subject_buckets.setdefault(base_subject, []).append(
-                (file_stem, df)
-            )
-
-            JobLogger.log(f"Collected {sheet} from {file_path.name}")
-
-# --------------------------------------------------
-# STEP 2: WRITE SUBJECT FILES + ALL_GRADES
-# --------------------------------------------------
-
-OUTPUT_DIR = DATA_DIR / "clustered"
-OUTPUT_DIR.mkdir(exist_ok=True)
-
-for subject, sheets in subject_buckets.items():
-
-    if not sheets:
-        continue
-
-    out_file = OUTPUT_DIR / f"{subject}.xlsx"
-
-    with pd.ExcelWriter(out_file, engine="openpyxl") as writer:
-
+    # --------------------------------------------------
+    # STEP 2: BUILD SUBJECT BUCKETS + ALL_GRADES
+    # --------------------------------------------------
+    
+    for subject, items in subject_buckets.items():
+        if not items:
+            continue
+            
+        if subject not in state["step4"]:
+            state["step4"][subject] = {}
+            
         combined_frames = []
-
-        for sheet_name, df in sheets:
-
-            # write individual grade sheet
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-
+        
+        for file_stem, df in items:
+            # Store individual grade sheet
+            # Key: "Grade 5" (or file_stem)
+            state["step4"][subject][file_stem] = df
+            
             # keep for combined view
             temp = df.copy()
-            temp["Source Grade File"] = sheet_name
+            temp["Source Grade File"] = file_stem
             combined_frames.append(temp)
-
+            
         # ---- create ALL_GRADES sheet ----
-        combined_df = pd.concat(combined_frames, ignore_index=True)
+        if combined_frames:
+            combined_df = pd.concat(combined_frames, ignore_index=True)
+            state["step4"][subject]["ALL_GRADES"] = combined_df
+            
+            # --------------------------------------------------
+            # STEP 3: ADD TO MASTER (all_subjects)
+            # --------------------------------------------------
+            new_sheet = f"all_grades_{subject}"
+            state["step4"]["master"][new_sheet] = combined_df
 
-        combined_df.to_excel(writer, sheet_name="ALL_GRADES", index=False)
-
-    JobLogger.log(f"Created {out_file.name} (with ALL_GRADES)")
-
-# --------------------------------------------------
-# STEP 3: BUILD all_subjects.xlsx FROM ALL_GRADES
-# --------------------------------------------------
-
-MASTER_FILE = OUTPUT_DIR / "all_subjects.xlsx"
-
-with pd.ExcelWriter(MASTER_FILE, engine="openpyxl") as writer:
-
-    for subject_file in OUTPUT_DIR.glob("*.xlsx"):
-
-        # don't recursively read the master file
-        if subject_file.name.lower() == "all_subjects.xlsx":
+    # --------------------------------------------------
+    # STEP 4: BUILD PERFORMANCE SUMMARY IN MASTER
+    # --------------------------------------------------
+    
+    summary_rows = []
+    
+    for sheet_name, df in state["step4"]["master"].items():
+        if not sheet_name.startswith("all_grades_"):
             continue
-
-        subject_name = subject_file.stem.lower()
-
-        xls = pd.ExcelFile(subject_file)
-
-        if "ALL_GRADES" not in xls.sheet_names:
-            JobLogger.log(f"Skipping {subject_file.name} (no ALL_GRADES)")
+            
+        subject = sheet_name.replace("all_grades_", "")
+        
+        if "Performance (%)" not in df.columns:
             continue
+            
+        # force numeric
+        perf = pd.to_numeric(df["Performance (%)"], errors="coerce")
+        
+        avg_perf = perf.mean()
+        if pd.isna(avg_perf):
+            avg_perf = 0
+            
+        summary_rows.append({
+            "Subject": subject,
+            "Avg Performance": round(avg_perf, 0)
+        })
+        
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows)
+        state["step4"]["master"]["Perf_summary"] = summary_df
 
-        df = pd.read_excel(subject_file, sheet_name="ALL_GRADES")
+    # Export Snapshot
+    # This will create outputs/step4_clustered.xlsx
+    # containing all subjects and master sheets flattened.
+    export_snapshot("step4_clustered", state["step4"])
+    JobLogger.log("Finished Step 4 (In-Memory).")
 
-        new_sheet = f"all_grades_{subject_name}"
-
-        # Excel sheet names max 31 chars
-        df.to_excel(writer, sheet_name=new_sheet[:31], index=False)
-
-        JobLogger.log(f"Added {new_sheet} to all_subjects.xlsx")
-
-JobLogger.log("\n✅ Finished building per-subject files and all_subjects.xlsx")
-
-# --------------------------------------------------
-# STEP 4: BUILD PERFORMANCE SUMMARY IN all_subjects.xlsx
-# --------------------------------------------------
-
-summary_rows = []
-
-# reopen the master file we just created
-xls = pd.ExcelFile(MASTER_FILE)
-
-for sheet in xls.sheet_names:
-
-    if not sheet.lower().startswith("all_grades_"):
-        continue
-
-    subject = sheet.replace("all_grades_", "")
-
-    df = pd.read_excel(MASTER_FILE, sheet_name=sheet)
-
-    if "Performance (%)" not in df.columns:
-        JobLogger.log(f"Skipping {sheet} (no Performance (%) column)")
-        continue
-
-    # force numeric in case Excel got cute
-    perf = pd.to_numeric(df["Performance (%)"], errors="coerce")
-
-    avg_perf = perf.mean()
-    if pd.isna(avg_perf):
-        avg_perf = 0
-
-    summary_rows.append({
-        "Subject": subject,
-        "Avg Performance": round(avg_perf, 0)
-    })
-
-summary_df = pd.DataFrame(summary_rows)
-
-# append Perf_summary sheet
-with pd.ExcelWriter(
-    MASTER_FILE,
-    engine="openpyxl",
-    mode="a",
-    if_sheet_exists="replace"
-) as writer:
-
-    summary_df.to_excel(writer, sheet_name="Perf_summary", index=False)
-
-JobLogger.log("\n📊 Added Perf_summary to all_subjects.xlsx")
+if __name__ == "__main__":
+    run_step4()
 

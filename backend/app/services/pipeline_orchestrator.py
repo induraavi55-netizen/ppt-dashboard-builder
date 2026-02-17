@@ -102,8 +102,15 @@ class PipelineOrchestrator:
         Used on server startup or new upload to ensure a fresh session.
         """
         try:
+            # 1. Clear DB State
             db.query(PipelineState).delete()
             db.commit()
+            
+            # 2. Clear In-Memory State
+            from app.services.pipeline_state import reset_pipeline_state as reset_in_memory_state
+            reset_in_memory_state()
+            print("In-Memory pipeline state reset.")
+            
         except Exception as e:
             db.rollback()
             print(f"Error resetting pipeline state: {e}")
@@ -168,22 +175,30 @@ class PipelineOrchestrator:
         try:
             self.update_job_status(job_id, JobStatus.RUNNING, db)
             
-            step_modules = {
-                0: "step0_formatting",
-                1: "step1_percentage_calc_pivot",
-                2: "step2_lo_wise_perf_w_qtns_pivot",
-                3: "step3_diff_lvl_wise_w_qtns_pivot",
-                4: "step4_clustering",
-                5: "step5_uploadable_data",
+            # Import new in-memory steps
+            from app.services.analysis_pipeline.performance_analysis.step0_formatting import run_step0
+            from app.services.analysis_pipeline.performance_analysis.step1_percentage_calc_pivot import run_step1
+            from app.services.analysis_pipeline.performance_analysis.step2_lo_wise_perf_w_qtns_pivot import run_step2
+            from app.services.analysis_pipeline.performance_analysis.step3_diff_lvl_wise_w_qtns_pivot import run_step3
+            from app.services.analysis_pipeline.performance_analysis.step4_clustering import run_step4
+            from app.services.analysis_pipeline.performance_analysis.step5_uploadable_data import run_step5
+
+            step_functions = {
+                0: run_step0,
+                1: run_step1,
+                2: run_step2,
+                3: run_step3,
+                4: run_step4,
+                5: run_step5,
             }
             
-            module_name = step_modules[step_num]
+            if step_num not in step_functions:
+                raise ValueError(f"Unknown step number: {step_num}")
             
+            # Execute in-memory function
+            # We still use working_directory logic if the functions rely on relative paths (e.g. data/)
             with working_directory(self.base_dir):
-                __import__(
-                    f"app.services.analysis_pipeline.performance_analysis.{module_name}",
-                    fromlist=[""]
-                )
+                step_functions[step_num]()
             
             output_files = self._get_output_files_for_step(step_num)
             
@@ -201,32 +216,39 @@ class PipelineOrchestrator:
             job_context_var.reset(token)
     
     def _get_output_files_for_step(self, step_num: int) -> list:
-        data_dir = self.base_dir / "data"
+        # User requirement: "All outputs go to /outputs folder."
+        # The new export_snapshot saves as:
+        # step0_formatted.xlsx
+        # step1_performance.xlsx
+        # step2_lo.xlsx
+        # step3_difficulty.xlsx
+        # step4_clustered.xlsx
+        # step5_uploadable.xlsx
         
-        if step_num in [0, 1, 2, 3]:
-            # Grade *.xlsx, Grade_*.xlsx, Grade-*.xlsx
-            all_files = list(data_dir.glob("*.xlsx"))
-            grade_files = []
-            import re
-            for f in all_files:
-                if re.match(r"^Grade[_\s-]?\d+\.xlsx$", f.name, re.IGNORECASE):
-                    grade_files.append(f)
-            
-            grade_files.sort(key=lambda x: x.name)
-            return [str(f.relative_to(self.base_dir)) for f in grade_files]
-        elif step_num == 4:
-            clustered_file = data_dir / "clustered" / "all_subjects.xlsx"
-            return [str(clustered_file.relative_to(self.base_dir))] if clustered_file.exists() else []
-        elif step_num == 5:
-            uploadable_file = data_dir / "uploadable data.xlsx"
-            return [str(uploadable_file.relative_to(self.base_dir))] if uploadable_file.exists() else []
+        outputs_dir = self.base_dir / "outputs"
+        
+        file_map = {
+            0: "step0_formatted.xlsx",
+            1: "step1_performance.xlsx",
+            2: "step2_lo.xlsx",
+            3: "step3_difficulty.xlsx",
+            4: "step4_clustered.xlsx",
+            5: "step5_uploadable.xlsx",
+        }
+        
+        filename = file_map.get(step_num)
+        if filename:
+            f = outputs_dir / filename
+            if f.exists():
+                return [str(f.relative_to(self.base_dir))]
+        
         return []
     
     def get_step_preview(self, step_name: str) -> dict:
         # Define mappings for fixed cases if any
+        # Participation Step 0 is still using data/REG VS PART.xlsx
         output_map = {
             "participation-0": ("data/REG VS PART.xlsx", ["schl_wise", "grade_wise"]),
-            # Performance steps are handled dynamically below
         }
         
         # Check static map first
@@ -242,7 +264,7 @@ class PipelineOrchestrator:
         if not target_files and step_name.startswith("performance-"):
             try:
                 step_num = int(step_name.split("-")[1])
-                # Uses internal method to get relevant output files for this step
+                # Uses internal method to get relevant output files for this step (now points to outputs/)
                 relative_files = self._get_output_files_for_step(step_num)
                 target_files = [str(self.base_dir / f) for f in relative_files]
             except ValueError:
