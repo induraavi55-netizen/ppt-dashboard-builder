@@ -61,6 +61,10 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
         # Case insensitive matching for school name
         # We will normalize both side to lower case and strip
         
+        # Create a mask for the school
+        # Using string methods on the series
+        school_mask = df["SchoolName"].astype(str).str.strip().str.lower() == str(school_name).strip().lower()
+
         if "Grade" in df.columns:
             part = df[
                 (school_mask)
