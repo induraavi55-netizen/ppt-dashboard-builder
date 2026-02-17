@@ -51,7 +51,15 @@ export default function AnalysisPipelinePage() {
     // Config State
     // Config State - Local form state initialized from global context
     const globalConfig = usePipelineConfig();
-    const [formConfig, setFormConfig] = useState<PipelineConfig>(globalConfig);
+
+    const safeGlobalConfig = useMemo(() => {
+        return globalConfig ?? {
+            use_all: true,
+            schools: []
+        };
+    }, [globalConfig]);
+
+    const [formConfig, setFormConfig] = useState<PipelineConfig>(() => safeGlobalConfig);
     const [configSaving, setConfigSaving] = useState(false);
     const [availableSchools, setAvailableSchools] = useState<string[]>([]);
 
@@ -68,7 +76,10 @@ export default function AnalysisPipelinePage() {
 
     // Sync form if global config updates (e.g. re-fetch)
     useEffect(() => {
-        setFormConfig(globalConfig);
+        setFormConfig(prev => {
+            if (!globalConfig) return prev;
+            return globalConfig;
+        });
     }, [globalConfig]);
 
     // Run All State
@@ -344,6 +355,8 @@ export default function AnalysisPipelinePage() {
         if (name.includes('uploadable data.xlsx')) return true;
         return false;
     };
+
+    // Loading Guard removed from here to ensure hooks are always called
 
     // Loading Guard - Rendered at the end to ensure hooks are always called
     if (!pipeline || pipeline.status === "loading") {

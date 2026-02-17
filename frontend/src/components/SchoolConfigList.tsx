@@ -32,7 +32,7 @@ export function SchoolConfigList({ configs, onChange, availableSchools = [] }: P
             <div className="space-y-3">
                 {configs.map((cfg, idx) => (
                     <SchoolConfigRow
-                        key={idx}
+                        key={`${cfg.school_name}-${idx}`}
                         config={cfg}
                         onChange={(newCfg) => handleUpdate(idx, newCfg)}
                         onRemove={() => handleRemove(idx)}

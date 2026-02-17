@@ -4,6 +4,11 @@ import { normalizePipelineConfig } from "../utils/normalizePipelineConfig";
 
 export function useSafePipelineConfig(config: any): PipelineConfig {
     return useMemo(() => {
-        return normalizePipelineConfig(config);
+        return normalizePipelineConfig(
+            config ?? {
+                use_all: true,
+                schools: []
+            }
+        );
     }, [config]);
 }
