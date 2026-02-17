@@ -389,16 +389,84 @@ async def get_job_status(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Job not found")
     return status
 
+from app.core.preview_registry import get_preview
+
 @router.get("/preview/{step_name}")
 async def get_step_preview(step_name: str):
-    result = orchestrator.get_step_preview(step_name)
-    if "error" in result:
-        # Return 400 (Bad Request) or 404 (Not Found)
-        # 400 implies "Step not run yet"
-        raise HTTPException(400, result["error"])
-    return result
-
-    return result
+    print(f"Preview requested: {step_name}")
+    
+    # 1. Try Memory Registry
+    mem_preview = get_preview(step_name)
+    if mem_preview:
+        print("Preview source: memory")
+        return {
+            "status": "ok",
+            "source": "memory",
+            "preview": mem_preview
+        }
+        
+    # 2. Fallback: Determine File Path
+    # Map step_name to file path(s)
+    # We try to look in 'outputs/' first, then 'data/'
+    
+    file_candidates = []
+    base_dir = orchestrator.base_dir
+    
+    if step_name == "participation-0":
+        file_candidates.append(base_dir / "data" / "REG VS PART.xlsx")
+    elif step_name.startswith("performance-"):
+        try:
+            step_num = int(step_name.split("-")[1])
+            fname_map = {
+                0: "step0_formatted.xlsx",
+                1: "step1_performance.xlsx",
+                2: "step2_lo.xlsx",
+                3: "step3_difficulty.xlsx",
+                4: "step4_clustered.xlsx",
+                5: "step5_uploadable.xlsx",
+            }
+            if step_num in fname_map:
+                file_candidates.append(base_dir / "outputs" / fname_map[step_num])
+        except:
+            pass
+            
+    # 3. Read File if exists
+    import pandas as pd
+    
+    for fpath in file_candidates:
+        if fpath.exists():
+            print(f"Preview source: file ({fpath.name})")
+            try:
+                xls = pd.ExcelFile(fpath)
+                preview_sheets = []
+                # Read first 5 sheets max
+                for sheet in xls.sheet_names[:5]:
+                    df = pd.read_excel(fpath, sheet_name=sheet)
+                    preview_df = df.head(100).fillna("")
+                    
+                    preview_sheets.append({
+                        "name": sheet,
+                        "columns": list(preview_df.columns),
+                        "rows": preview_df.to_dict(orient="records")
+                    })
+                
+                return {
+                    "status": "ok",
+                    "source": "file",
+                    "preview": {"sheets": preview_sheets}
+                }
+            except Exception as e:
+                print(f"Error reading file preview: {e}")
+                # Continue to fallback
+                pass
+                
+    # 4. Final Fallback: Empty
+    print("Preview source: empty")
+    return {
+        "status": "empty",
+        "source": "none",
+        "preview": {"sheets": []}
+    }
 
 
 @router.get("/export/{step_name}")

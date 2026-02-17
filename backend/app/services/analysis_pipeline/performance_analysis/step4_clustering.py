@@ -115,6 +115,35 @@ def run_step4():
     # This will create outputs/step4_clustered.xlsx
     # containing all subjects and master sheets flattened.
     export_snapshot("step4_clustered", state["step4"])
+    
+    # --------------------------------------------------
+    # REGISTER PREVIEW
+    # --------------------------------------------------
+    from app.core.preview_registry import register_preview
+    
+    preview_sheets = []
+    MAX_PREVIEW_ROWS = 100
+    
+    # step4 structure is: { "Subject": { "Grade": df }, "master": { ... } }
+    
+    # Flatten loop
+    for top_key, inner_dict in state["step4"].items():
+        for sheet_name, df in inner_dict.items():
+            if df is None or df.empty:
+                continue
+                
+            preview_df = df.head(MAX_PREVIEW_ROWS).fillna("")
+            
+            preview_sheets.append({
+                "name": f"{top_key}::{sheet_name}",
+                "columns": list(preview_df.columns),
+                "rows": preview_df.to_dict(orient="records")
+            })
+            if len(preview_sheets) >= 10: break
+        if len(preview_sheets) >= 10: break
+
+    register_preview("performance-4", {"sheets": preview_sheets})
+
     JobLogger.log("Finished Step 4 (In-Memory).")
 
 if __name__ == "__main__":

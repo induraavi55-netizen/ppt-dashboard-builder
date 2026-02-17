@@ -157,7 +157,32 @@ JobLogger.log(str(overall))
 with pd.ExcelWriter(FILE, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
     school_totals.to_excel(writer, sheet_name="schl_wise", index=False)
     overall.to_excel(writer, sheet_name="grade_wise", index=False)
+    
+    # --------------------------------------------------
+    # REGISTER PREVIEW
+    # --------------------------------------------------
+    from app.core.preview_registry import register_preview
+    
+    preview_sheets = []
+    
+    # schl_wise
+    st_preview = school_totals.head(100).fillna("")
+    preview_sheets.append({
+        "name": "schl_wise",
+        "columns": list(st_preview.columns),
+        "rows": st_preview.to_dict(orient="records")
+    })
+    
+    # grade_wise
+    ov_preview = overall.head(100).fillna("")
+    preview_sheets.append({
+        "name": "grade_wise",
+        "columns": list(ov_preview.columns),
+        "rows": ov_preview.to_dict(orient="records")
+    })
+    
+    register_preview("participation-0", {"sheets": preview_sheets})
 
-JobLogger.log("\n✅ DONE. Sheets written:")
-JobLogger.log(" - schl_wise")
-JobLogger.log(" - grade_wise")
+    JobLogger.log("\n✅ DONE. Sheets written and registered:")
+    JobLogger.log(" - schl_wise")
+    JobLogger.log(" - grade_wise")

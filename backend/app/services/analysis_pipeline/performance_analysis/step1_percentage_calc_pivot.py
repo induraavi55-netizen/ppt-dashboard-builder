@@ -83,7 +83,34 @@ def run_step1():
             state["step1"][filename]["Sub_wise_avg_perf"] = pivot_df
 
     # Export Snapshot
+    # Export Snapshot
     export_snapshot("step1_performance", state["step1"])
+    
+    # --------------------------------------------------
+    # REGISTER PREVIEW
+    # --------------------------------------------------
+    from app.core.preview_registry import register_preview
+    
+    preview_sheets = []
+    MAX_PREVIEW_ROWS = 100
+    
+    for filename, sheets in state["step1"].items():
+        for sheet_name, df in sheets.items():
+            if df is None or df.empty:
+                continue
+                
+            preview_df = df.head(MAX_PREVIEW_ROWS).fillna("")
+            
+            preview_sheets.append({
+                "name": f"{filename}::{sheet_name}",
+                "columns": list(preview_df.columns),
+                "rows": preview_df.to_dict(orient="records")
+            })
+            if len(preview_sheets) >= 5: break
+        if len(preview_sheets) >= 5: break
+            
+    register_preview("performance-1", {"sheets": preview_sheets})
+    
     JobLogger.log("Finished Step 1 (In-Memory).")
 
 if __name__ == "__main__":

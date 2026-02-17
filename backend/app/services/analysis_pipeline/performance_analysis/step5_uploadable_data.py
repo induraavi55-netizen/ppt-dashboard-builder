@@ -127,6 +127,29 @@ def run_step5():
     # Export Snapshot (This is the uploadable data)
     export_snapshot("step5_uploadable", state["step5"])
     
+    # --------------------------------------------------
+    # REGISTER PREVIEW
+    # --------------------------------------------------
+    from app.core.preview_registry import register_preview
+    
+    preview_sheets = []
+    MAX_PREVIEW_ROWS = 100
+    
+    for sheet_name, df in state["step5"].items():
+        if df is None or df.empty:
+            continue
+            
+        preview_df = df.head(MAX_PREVIEW_ROWS).fillna("")
+        
+        preview_sheets.append({
+            "name": sheet_name,
+            "columns": list(preview_df.columns),
+            "rows": preview_df.to_dict(orient="records")
+        })
+        if len(preview_sheets) >= 10: break
+
+    register_preview("performance-5", {"sheets": preview_sheets})
+    
     # ----------------------------
     # WRITE FINAL OUTPUT TO DATA DIR
     # ----------------------------

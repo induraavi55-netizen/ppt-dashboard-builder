@@ -130,7 +130,45 @@ def run_step0():
             raise e
 
     # Export Snapshot
+    # Export Snapshot
     export_snapshot("step0_formatted", state["step0"])
+    
+    # --------------------------------------------------
+    # REGISTER PREVIEW (In-Memory)
+    # --------------------------------------------------
+    from app.core.preview_registry import register_preview
+    
+    preview_sheets = []
+    
+    # We want to show a few representative sheets
+    # "step0" is a dict of filename -> {sheetname -> df}
+    # We can flatten this or just show the first file's sheets
+    
+    MAX_PREVIEW_ROWS = 100
+    
+    for filename, sheets in state["step0"].items():
+        for sheet_name, df in sheets.items():
+            if df is None or df.empty:
+                continue
+                
+            # Convert to frontend-friendly format
+            # Handle NaN/Inf for JSON serialization safety
+            preview_df = df.head(MAX_PREVIEW_ROWS).fillna("")
+            
+            preview_sheets.append({
+                "name": f"{filename}::{sheet_name}", # Unique name
+                "columns": list(preview_df.columns),
+                "rows": preview_df.to_dict(orient="records")
+            })
+            
+            # Limit to a reasonable number of sheets for preview to avoid payload bloat
+            if len(preview_sheets) >= 5:
+                break
+        if len(preview_sheets) >= 5:
+            break
+            
+    register_preview("performance-0", {"sheets": preview_sheets})
+    
     JobLogger.log("Finished Step 0 (In-Memory).")
 
 if __name__ == "__main__":

@@ -85,8 +85,27 @@ export const getPipelineStatus = async (jobId: string) => {
 };
 
 export const getStepPreview = async (stepName: string) => {
-    const res = await api.get(`/pipeline/preview/${stepName}`);
-    return res.data;
+    try {
+        const res = await api.get(`/pipeline/preview/${stepName}`);
+        const data = res.data;
+
+        // Handle new Wrapped Response { status, source, preview }
+        if (data && data.status) {
+            if (data.status === "ok" && data.preview) {
+                return data.preview;
+            } else {
+                // Return empty preview for "empty" status or others
+                return { sheets: [] };
+            }
+        }
+
+        // Fallback for legacy response (direct object) if any
+        return data;
+    } catch (error) {
+        console.error("Preview fetch failed:", error);
+        // Fallback to empty on error to prevent UI crash
+        return { sheets: [] };
+    }
 };
 
 export const getPipelineStepPreview = getStepPreview;
