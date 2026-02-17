@@ -12,21 +12,37 @@ import { validatePipeline, safeArray } from '../utils/pipelineValidation';
 
 export default function AnalysisPipelinePage() {
     const navigate = useNavigate();
-    const { state, refresh } = usePipelineState();
+    const { state: pipeline, refresh } = usePipelineState();
 
     // Debug Instrumentation
     useEffect(() => {
         if (typeof window !== "undefined") {
-            window.pipelineDebug = state;
-            if (state) {
-                const validation = validatePipeline(state);
+            window.pipelineDebug = pipeline;
+            console.log("Pipeline state:", pipeline);
+
+            if (pipeline) {
+                const validation = validatePipeline(pipeline);
                 console.groupCollapsed("Pipeline Debug Update");
-                console.log("State:", state);
+                console.log("State:", pipeline);
                 console.log("Validation:", validation);
                 console.groupEnd();
             }
         }
-    }, [state]);
+    }, [pipeline]);
+
+    // Loading Guard
+    if (!pipeline || pipeline.status === "loading") {
+        return (
+            <div className="p-4 flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+                    <p className="text-gray-500">Loading pipeline...</p>
+                </div>
+            </div>
+        );
+    }
+
+
 
     // Upload & Files State
     const [files, setFiles] = useState<string[]>([]);
@@ -50,9 +66,9 @@ export default function AnalysisPipelinePage() {
 
     // Derived States with Safeguards
     const pipelineValid = useMemo(() => {
-        if (!state) return false;
-        return validatePipeline(state).valid;
-    }, [state]);
+        // Safe fallback
+        return validatePipeline(pipeline).valid;
+    }, [pipeline]);
 
     // Initial check for existing files - Backend is source of truth
     const checkFiles = async () => {
@@ -330,7 +346,7 @@ export default function AnalysisPipelinePage() {
             <h1 className="text-3xl font-bold mb-8">Analysis Pipeline</h1>
 
             {/* Degraded State Warning */}
-            {state && !pipelineValid && (
+            {pipeline && !pipelineValid && (
                 <div className="mb-8 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r shadow-sm">
                     <div className="flex items-center">
                         <AlertCircle className="h-6 w-6 text-yellow-600 mr-3" />
@@ -575,7 +591,7 @@ export default function AnalysisPipelinePage() {
             </section>
 
             {/* Finalize Section */}
-            {state && state.final_file_ready && (
+            {pipeline?.final_file_ready && (
                 <section className="bg-purple-50 p-6 rounded-lg border-2 border-purple-300">
                     <h2 className="text-2xl font-semibold mb-4 text-purple-900">
                         ✅ Pipeline Complete
