@@ -47,7 +47,8 @@ export default function AnalysisPipelinePage() {
     const [finalizing, setFinalizing] = useState(false);
 
     // Config State
-    const [config, setConfig] = useState(DEFAULT_PIPELINE_CONFIG);
+    // Config State
+    const [config, setConfig] = useState<{ useAll: boolean; schools: SchoolConfig[] }>(DEFAULT_PIPELINE_CONFIG);
     const [configLoading, setConfigLoading] = useState(true);
     const [configSaving, setConfigSaving] = useState(false);
 
@@ -456,48 +457,55 @@ export default function AnalysisPipelinePage() {
                 <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2 text-gray-800">
                     <Settings className="text-gray-600" />
                     Configuration
+                    {configLoading && <Loader2 className="animate-spin ml-2 text-gray-400" size={20} />}
                 </h2>
 
-                <div className="mb-6">
-                    <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={config.useAll}
-                            onChange={(e) => setConfig({ ...config, useAll: e.target.checked })}
-                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                        <div>
-                            <span className="block font-semibold text-gray-800">Use ALL Schools and ALL Grades</span>
-                            <span className="block text-sm text-gray-500">
-                                Automatically include every school and grade found in the uploaded data.
-                            </span>
+                {configLoading ? (
+                    <div className="py-8 text-center text-gray-500 italic">Loading configuration...</div>
+                ) : (
+                    <>
+                        <div className="mb-6">
+                            <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={config.useAll}
+                                    onChange={(e) => setConfig({ ...config, useAll: e.target.checked })}
+                                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                <div>
+                                    <span className="block font-semibold text-gray-800">Use ALL Schools and ALL Grades</span>
+                                    <span className="block text-sm text-gray-500">
+                                        Automatically include every school and grade found in the uploaded data.
+                                    </span>
+                                </div>
+                            </label>
                         </div>
-                    </label>
-                </div>
 
-                {!config.useAll && (
-                    <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
-                        <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                            Define specific schools and their grade ranges to include.
-                        </p>
-                        <SchoolConfigList
-                            configs={config.schools || []}
-                            onChange={(newSchools) => setConfig({ ...config, schools: newSchools })}
-                        />
-                    </div>
+                        {!config.useAll && (
+                            <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
+                                <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Define specific schools and their grade ranges to include.
+                                </p>
+                                <SchoolConfigList
+                                    configs={config.schools || []}
+                                    onChange={(newSchools) => setConfig({ ...config, schools: newSchools })}
+                                />
+                            </div>
+                        )}
+
+                        <div className="mt-8 flex justify-end">
+                            <button
+                                onClick={handleSaveConfig}
+                                disabled={configSaving || configLoading}
+                                className="px-6 py-2 bg-gray-900 text-white rounded hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors font-medium shadow-sm"
+                            >
+                                <Save size={18} />
+                                {configSaving ? "Saving..." : "Save Configuration"}
+                            </button>
+                        </div>
+                    </>
                 )}
-
-                <div className="mt-8 flex justify-end">
-                    <button
-                        onClick={handleSaveConfig}
-                        disabled={configSaving}
-                        className="px-6 py-2 bg-gray-900 text-white rounded hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors font-medium shadow-sm"
-                    >
-                        <Save size={18} />
-                        {configSaving ? "Saving..." : "Save Configuration"}
-                    </button>
-                </div>
             </section>
 
             {/* Participation Section */}
