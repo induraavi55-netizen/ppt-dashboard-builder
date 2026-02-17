@@ -110,6 +110,41 @@ else:
     JobLogger.log("Using ALL schools (Default)")
     df_filt = df.copy()
 
+    # -----------------------------
+    # GRADE RANGE MASKING
+    # -----------------------------
+    # Even if using ALL schools (or filtered), strictly if config has ranges, apply them?
+    # Actually, "Use All" usually implies "Ignore ranges, use everything".
+    # But if "not USE_ALL" (i.e. Custom Config), we MUST apply ranges.
+    
+    if not USE_ALL:
+        JobLogger.log("Applying School-specific Grade Ranges...")
+        for sc in SCHOOLS_CONFIG:
+            s_name = sc.get("schoolName", "").strip().lower()
+            f_grade = sc.get("fromGrade", 0)
+            t_grade = sc.get("toGrade", 100)
+            
+            # Find rows for this school
+            mask_school = df_filt["School Name"].str.lower() == s_name
+            
+            if not mask_school.any():
+                continue
+                
+            # Zero out out-of-range columns
+            # Registered
+            for col_idx, grade in reg_grade_map.items():
+                if not (f_grade <= grade <= t_grade):
+                    col_name = df.columns[col_idx]
+                    # We use .loc to set values. Note: columns might be strings or ints depending on read_excel
+                    # df.columns[col_idx] gives the name
+                    df_filt.loc[mask_school, col_name] = 0
+                    
+            # Participated
+            for col_idx, grade in part_grade_map.items():
+                if not (f_grade <= grade <= t_grade):
+                    col_name = df.columns[col_idx]
+                    df_filt.loc[mask_school, col_name] = 0
+
 # -----------------------------
 # SCHOOL TOTALS (SAFE)
 # -----------------------------
