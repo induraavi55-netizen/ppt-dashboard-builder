@@ -5,9 +5,10 @@ import { type SchoolConfig } from "../config/defaultPipelineConfig";
 interface Props {
     configs: SchoolConfig[];
     onChange: (configs: SchoolConfig[]) => void;
+    availableSchools?: string[];
 }
 
-export function SchoolConfigList({ configs, onChange }: Props) {
+export function SchoolConfigList({ configs, onChange, availableSchools = [] }: Props) {
     const handleAdd = () => {
         onChange([
             ...configs,
@@ -35,6 +36,7 @@ export function SchoolConfigList({ configs, onChange }: Props) {
                         config={cfg}
                         onChange={(newCfg) => handleUpdate(idx, newCfg)}
                         onRemove={() => handleRemove(idx)}
+                        availableSchools={availableSchools}
                     />
                 ))}
             </div>

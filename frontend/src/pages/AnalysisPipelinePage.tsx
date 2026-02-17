@@ -3,7 +3,7 @@ import axios from 'axios';
 import { PipelineStepButton } from '../components/PipelineStepButton';
 
 import { usePipelineState } from '../hooks/usePipelineState';
-import { fetchStepOutput, getPipelineFiles, uploadData, uploadPipelineData, updatePipelineConfig, runPipelineStep, getPipelineStatus } from '../api';
+import { fetchStepOutput, getPipelineFiles, uploadData, uploadPipelineData, updatePipelineConfig, runPipelineStep, getPipelineStatus, fetchAvailableSchools } from '../api';
 import { useNavigate } from 'react-router-dom';
 import { LogViewer } from '../components/LogViewer';
 import { DataPreview } from '../components/DataPreview';
@@ -53,6 +53,18 @@ export default function AnalysisPipelinePage() {
     const globalConfig = usePipelineConfig();
     const [formConfig, setFormConfig] = useState<PipelineConfig>(globalConfig);
     const [configSaving, setConfigSaving] = useState(false);
+    const [availableSchools, setAvailableSchools] = useState<string[]>([]);
+
+    // Load available schools 
+    useEffect(() => {
+        fetchAvailableSchools()
+            .then((res: { schools: string[] }) => {
+                if (res.schools && Array.isArray(res.schools)) {
+                    setAvailableSchools(res.schools);
+                }
+            })
+            .catch((err: any) => console.error("Failed to load schools", err));
+    }, []);
 
     // Sync form if global config updates (e.g. re-fetch)
     useEffect(() => {
@@ -482,6 +494,7 @@ export default function AnalysisPipelinePage() {
                         <SchoolConfigList
                             configs={formConfig.schools || []}
                             onChange={(newSchools) => setFormConfig({ ...formConfig, schools: newSchools })}
+                            availableSchools={availableSchools}
                         />
                     </div>
                 )}

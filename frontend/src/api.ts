@@ -207,4 +207,14 @@ export const getPipelineConfig = async () => {
     return res.data;
 };
 
+export const fetchAvailableSchools = async (): Promise<{ schools: string[] }> => {
+    try {
+        const res = await api.get("/pipeline/available-schools");
+        return res.data;
+    } catch (err) {
+        console.error("Failed to fetch available schools", err);
+        return { schools: [] };
+    }
+};
+
 export default api;

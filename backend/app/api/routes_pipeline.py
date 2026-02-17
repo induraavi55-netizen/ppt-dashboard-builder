@@ -47,6 +47,55 @@ def update_pipeline_config(config: PipelineConfig):
 def get_pipeline_config():
     return PIPELINE_CONFIG
 
+@router.get("/available-schools")
+def get_available_schools():
+    """
+    Parses the uploaded REG VS PART.xlsx to find available schools.
+    """
+    reg_file, _, _ = scan_pipeline_data(orchestrator.base_dir / "data")
+    
+    if not reg_file:
+         return {"schools": []}
+         
+    try:
+        data_path = orchestrator.base_dir / "data" / reg_file
+        # Using the parse_excel logic or just reading the sheet directly for speed
+        # Assuming sheet structure as per step0_summarizing.py
+        import pandas as pd
+        
+        # Copied logic from step0_summarizing.py for robust reading
+        # Sheet is "Assessment Participation". Row 2 is header? Step 0 says:
+        # raw = pd.read_excel(FILE, sheet_name=SHEET, header=None)
+        # cols[1] = "School Name"
+        
+        # We'll just try to read "Assessment Participation"
+        # If strict performance is needed we could cache this
+        df = pd.read_excel(data_path, sheet_name="Assessment Participation", header=1) # 1-indexed? Step 0 says 2 header rows?
+        # Step0: raw.iloc[2:].copy()... header_row = raw.iloc[1]
+        
+        # Let's trust step0's robust approach less and just grabbing column 1 ("School Name")
+        # Step0: cols[1] = "School Name"
+        
+        raw = pd.read_excel(data_path, sheet_name="Assessment Participation", header=None)
+        # Real data starts at index 2
+        df_real = raw.iloc[2:].copy()
+        
+        # School Name is at index 1
+        schools = sorted(
+            df_real[1] # Column index 1
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .loc[lambda x: x.str.lower() != "total"]
+            .unique()
+            .tolist()
+        )
+        
+        return {"schools": schools}
+    except Exception as e:
+        print(f"Error reading available schools: {e}")
+        return {"schools": []}
+
 # We need `re` for regex validation.
 import re
 
