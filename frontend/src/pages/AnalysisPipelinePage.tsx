@@ -9,9 +9,10 @@ import { LogViewer } from '../components/LogViewer';
 import { DataPreview } from '../components/DataPreview';
 import { FileCode, Folder, Upload, AlertCircle, CheckCircle2, Settings, Play, Save, Loader2 } from 'lucide-react';
 import { validatePipeline, safeArray } from '../utils/pipelineValidation';
-import { type SchoolConfig } from "../components/SchoolConfigRow";
+import { type PipelineConfig } from "../config/defaultPipelineConfig";
 import { SchoolConfigList } from "../components/SchoolConfigList";
-import { DEFAULT_PIPELINE_CONFIG } from "../utils/defaultPipelineConfig";
+import { DEFAULT_PIPELINE_CONFIG } from "../config/defaultPipelineConfig";
+import { normalizePipelineConfig } from "../utils/normalizePipelineConfig";
 
 export default function AnalysisPipelinePage() {
     const navigate = useNavigate();
@@ -48,7 +49,8 @@ export default function AnalysisPipelinePage() {
 
     // Config State
     // Config State
-    const [config, setConfig] = useState<{ useAll: boolean; schools: SchoolConfig[] }>(DEFAULT_PIPELINE_CONFIG);
+    // Config State
+    const [config, setConfig] = useState<PipelineConfig>(DEFAULT_PIPELINE_CONFIG);
     const [configLoading, setConfigLoading] = useState(true);
     const [configSaving, setConfigSaving] = useState(false);
 
@@ -89,10 +91,7 @@ export default function AnalysisPipelinePage() {
             setConfigLoading(true);
             const data = await getPipelineConfig();
             if (data) {
-                setConfig({
-                    useAll: data.useAll ?? true,
-                    schools: data.schools || []
-                });
+                setConfig(normalizePipelineConfig(data));
             }
         } catch (err) {
             console.error("Failed to load config", err);
@@ -209,9 +208,15 @@ export default function AnalysisPipelinePage() {
     const handleSaveConfig = async () => {
         try {
             setConfigSaving(true);
+            // Map snake_case (internal) to camelCase (backend legacy)
+            // TODO: Update backend to accept snake_case
             await updatePipelineConfig({
-                useAll: config.useAll,
-                schools: config.schools
+                useAll: config.use_all,
+                schools: config.schools.map(s => ({
+                    schoolName: s.school_name,
+                    fromGrade: s.from_grade,
+                    toGrade: s.to_grade
+                }))
             });
             alert("Configuration saved!");
             setConfigSaving(false);
@@ -468,8 +473,8 @@ export default function AnalysisPipelinePage() {
                             <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
                                 <input
                                     type="checkbox"
-                                    checked={config.useAll}
-                                    onChange={(e) => setConfig({ ...config, useAll: e.target.checked })}
+                                    checked={config.use_all}
+                                    onChange={(e) => setConfig({ ...config, use_all: e.target.checked })}
                                     className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                                 />
                                 <div>
@@ -481,7 +486,7 @@ export default function AnalysisPipelinePage() {
                             </label>
                         </div>
 
-                        {!config.useAll && (
+                        {!config.use_all && (
                             <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
                                 <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
                                 <p className="text-sm text-gray-600 mb-4">

@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
-import { SchoolConfigRow, type SchoolConfig } from "./SchoolConfigRow";
+import { SchoolConfigRow } from "./SchoolConfigRow";
+import { type SchoolConfig } from "../config/defaultPipelineConfig";
 
 interface Props {
     configs: SchoolConfig[];
@@ -10,7 +11,7 @@ export function SchoolConfigList({ configs, onChange }: Props) {
     const handleAdd = () => {
         onChange([
             ...configs,
-            { schoolName: "", fromGrade: 5, toGrade: 10 }
+            { school_name: "", from_grade: 5, to_grade: 10 }
         ]);
     };
 

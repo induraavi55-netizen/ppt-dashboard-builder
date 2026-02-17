@@ -1,10 +1,5 @@
 import { Trash2 } from "lucide-react";
-
-export interface SchoolConfig {
-    schoolName: string;
-    fromGrade: number;
-    toGrade: number;
-}
+import { type SchoolConfig } from "../config/defaultPipelineConfig";
 
 interface Props {
     config: SchoolConfig;
@@ -21,8 +16,8 @@ export function SchoolConfigRow({ config, onChange, onRemove }: Props) {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">School Name</label>
                 <input
                     type="text"
-                    value={config.schoolName}
-                    onChange={(e) => onChange({ ...config, schoolName: e.target.value })}
+                    value={config.school_name}
+                    onChange={(e) => onChange({ ...config, school_name: e.target.value })}
                     className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter school name..."
                 />
@@ -32,8 +27,8 @@ export function SchoolConfigRow({ config, onChange, onRemove }: Props) {
                 <div className="w-24">
                     <label className="block text-xs font-semibold text-gray-500 mb-1">From Grade</label>
                     <select
-                        value={config.fromGrade}
-                        onChange={(e) => onChange({ ...config, fromGrade: Number(e.target.value) })}
+                        value={config.from_grade}
+                        onChange={(e) => onChange({ ...config, from_grade: Number(e.target.value) })}
                         className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
                     >
                         {GRADE_OPTIONS.map(g => (
@@ -45,8 +40,8 @@ export function SchoolConfigRow({ config, onChange, onRemove }: Props) {
                 <div className="w-24">
                     <label className="block text-xs font-semibold text-gray-500 mb-1">To Grade</label>
                     <select
-                        value={config.toGrade}
-                        onChange={(e) => onChange({ ...config, toGrade: Number(e.target.value) })}
+                        value={config.to_grade}
+                        onChange={(e) => onChange({ ...config, to_grade: Number(e.target.value) })}
                         className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
                     >
                         {GRADE_OPTIONS.map(g => (
