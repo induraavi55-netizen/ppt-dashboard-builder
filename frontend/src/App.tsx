@@ -40,7 +40,8 @@ function App() {
           </div>
         </BrowserRouter>
       </QueryClientProvider>
-      );
+    </PipelineConfigProvider>
+  );
 }
 
-      export default App;
+export default App;

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { PipelineStepButton } from '../components/PipelineStepButton';
 
 import { usePipelineState } from '../hooks/usePipelineState';
-import { fetchStepOutput, getPipelineFiles, uploadData, uploadPipelineData, updatePipelineConfig, getPipelineConfig, runPipelineStep, getPipelineStatus } from '../api';
+import { fetchStepOutput, getPipelineFiles, uploadData, uploadPipelineData, updatePipelineConfig, runPipelineStep, getPipelineStatus } from '../api';
 import { useNavigate } from 'react-router-dom';
 import { LogViewer } from '../components/LogViewer';
 import { DataPreview } from '../components/DataPreview';
@@ -11,8 +11,6 @@ import { FileCode, Folder, Upload, AlertCircle, CheckCircle2, Settings, Play, Sa
 import { validatePipeline, safeArray } from '../utils/pipelineValidation';
 import { type PipelineConfig } from "../config/defaultPipelineConfig";
 import { SchoolConfigList } from "../components/SchoolConfigList";
-import { DEFAULT_PIPELINE_CONFIG } from "../config/defaultPipelineConfig";
-import { normalizePipelineConfig } from "../utils/normalizePipelineConfig";
 import { usePipelineConfig } from "../core/PipelineConfigProvider";
 
 export default function AnalysisPipelinePage() {
@@ -497,13 +495,11 @@ export default function AnalysisPipelinePage() {
                         <Save size={18} />
                         {configSaving ? "Saving..." : "Save Configuration"}
                     </button>
-                </button>
-        </div>
-            </section >
+                </div>
+            </section>
 
-        {/* Participation Section */ }
-        < section className = {`mb-12 bg-blue-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`
-}>
+            {/* Participation Section */}
+            <section className={`mb-12 bg-blue-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`}>
                 <h2 className="text-2xl font-semibold mb-4 text-blue-900">
                     📊 Participation Analysis
                 </h2>
@@ -519,10 +515,10 @@ export default function AnalysisPipelinePage() {
                 />
 
 
-            </section >
+            </section>
 
-    {/* Performance Section */ }
-    < section className = {`mb-12 bg-green-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`}>
+            {/* Performance Section */}
+            <section className={`mb-12 bg-green-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`}>
                 <h2 className="text-2xl font-semibold mb-4 text-green-900">
                     📈 Performance Analysis
                 </h2>
@@ -601,28 +597,26 @@ export default function AnalysisPipelinePage() {
                         </div>
                     ))}
                 </div>
-            </section >
+            </section>
 
-    {/* Finalize Section */ }
-{
-    pipeline?.final_file_ready && (
-        <section className="bg-purple-50 p-6 rounded-lg border-2 border-purple-300">
-            <h2 className="text-2xl font-semibold mb-4 text-purple-900">
-                ✅ Pipeline Complete
-            </h2>
-            <p className="text-gray-700 mb-4">
-                Final dataset ready: <code className="bg-white px-2 py-1 rounded">uploadable data.xlsx</code>
-            </p>
-            <button
-                onClick={handleFinalize}
-                disabled={finalizing}
-                className="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
-            >
-                {finalizing ? 'Processing...' : '👉 Use Final Dataset for PPT'}
-            </button>
-        </section>
-    )
-}
-        </div >
+            {/* Finalize Section */}
+            {pipeline?.final_file_ready && (
+                <section className="bg-purple-50 p-6 rounded-lg border-2 border-purple-300">
+                    <h2 className="text-2xl font-semibold mb-4 text-purple-900">
+                        ✅ Pipeline Complete
+                    </h2>
+                    <p className="text-gray-700 mb-4">
+                        Final dataset ready: <code className="bg-white px-2 py-1 rounded">uploadable data.xlsx</code>
+                    </p>
+                    <button
+                        onClick={handleFinalize}
+                        disabled={finalizing}
+                        className="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
+                    >
+                        {finalizing ? 'Processing...' : '👉 Use Final Dataset for PPT'}
+                    </button>
+                </section>
+            )}
+        </div>
     );
 }
