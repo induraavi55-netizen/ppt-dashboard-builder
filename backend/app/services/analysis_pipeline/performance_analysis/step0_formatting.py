@@ -7,11 +7,19 @@ from app.core.logging_utils import JobLogger
 # Folder containing your Excel files
 DATA_DIR = Path("data") 
 
+import re
+from app.core.pipeline_config import PIPELINE_CONFIG
+
+# ...
+
 def run_step0():
     JobLogger.log("Starting Step 0 (In-Memory)...")
     
     state = get_pipeline_state()
     state["step0"] = {} # Initialize/Reset
+    
+    USE_ALL = PIPELINE_CONFIG.get("useAll", True)
+    SCHOOLS_CONFIG = PIPELINE_CONFIG.get("schools", [])
     
     # All Excel files in that folder
     excel_files = [
@@ -26,6 +34,15 @@ def run_step0():
     for input_file in excel_files:
         JobLogger.log(f"Processing {input_file.name}...")
         
+        # Extract Grade from filename
+        # Patterns: "Grade 5.xlsx", "Grade_5.xlsx", "Grade-05.xlsx"
+        fname = input_file.name
+        match = re.search(r"Grade[\s_-]*(\d+)", fname, re.IGNORECASE)
+        current_grade = int(match.group(1)) if match else None
+        
+        if current_grade is None:
+            JobLogger.log(f"WARNING: Could not determine grade from filename {fname}. Skipping filtering logic checks.")
+
         # Load Raw Data
         try:
             xls = pd.ExcelFile(input_file)
@@ -61,6 +78,32 @@ def run_step0():
                 selected_cols = [c for c in selected_cols if c in df.columns]
 
                 formatted_df = df[selected_cols].copy()
+                
+                # -----------------------------
+                # FILTERING LOGIC (NEW)
+                # -----------------------------
+                if not USE_ALL and current_grade is not None:
+                    # Identify which schools are allowed for THIS grade
+                    allowed_schools = set()
+                    for sc in SCHOOLS_CONFIG:
+                        # Pydantic dicts: {'schoolName': '...', 'fromGrade': x, 'toGrade': y}
+                        # Check grade range
+                        s_name = sc.get("schoolName", "").strip().lower()
+                        f_grade = sc.get("fromGrade", 0)
+                        t_grade = sc.get("toGrade", 100)
+                        
+                        if f_grade <= current_grade <= t_grade:
+                            allowed_schools.add(s_name)
+                    
+                    # Apply filter
+                    if "SchoolName" in formatted_df.columns:
+                         # Normalize data school names
+                        formatted_df = formatted_df[
+                            formatted_df["SchoolName"].astype(str).str.strip().str.lower().isin(allowed_schools)
+                        ]
+                        JobLogger.log(f"  Filtered for Grade {current_grade}: {len(allowed_schools)} allowed schools. Rows: {len(formatted_df)}")
+                    else:
+                        JobLogger.log("  WARNING: 'SchoolName' column missing. Cannot filter.")
 
                 # Create school id
                 if "Student LoginId" in formatted_df.columns:

@@ -1,6 +1,14 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+
+class SchoolConfig(BaseModel):
+    schoolName: str
+    fromGrade: int
+    toGrade: int
 
 class PipelineConfig(BaseModel):
-    exam_grades: List[int]
-    participating_schools: List[str]
+    useAll: bool
+    schools: List[SchoolConfig] = []
+    # Legacy fields (optional, to avoid breaking if older client sends them)
+    exam_grades: Optional[List[int]] = None
+    participating_schools: Optional[List[str]] = None

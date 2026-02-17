@@ -9,6 +9,8 @@ import { LogViewer } from '../components/LogViewer';
 import { DataPreview } from '../components/DataPreview';
 import { FileCode, Folder, Upload, AlertCircle, CheckCircle2, Settings, Play, Save, Loader2 } from 'lucide-react';
 import { validatePipeline, safeArray } from '../utils/pipelineValidation';
+import { type SchoolConfig } from "../components/SchoolConfigRow";
+import { SchoolConfigList } from "../components/SchoolConfigList";
 
 export default function AnalysisPipelinePage() {
     const navigate = useNavigate();
@@ -44,8 +46,8 @@ export default function AnalysisPipelinePage() {
     const [finalizing, setFinalizing] = useState(false);
 
     // Config State
-    const [examGrades, setExamGrades] = useState<string>("5,6,7,8,9,10,11,12");
-    const [participatingSchools, setParticipatingSchools] = useState<string>("");
+    const [useAll, setUseAll] = useState(true);
+    const [schools, setSchools] = useState<SchoolConfig[]>([]);
     const [configSaving, setConfigSaving] = useState(false);
 
     // Run All State
@@ -84,11 +86,8 @@ export default function AnalysisPipelinePage() {
         try {
             const config = await getPipelineConfig();
             if (config) {
-                // Safe access to potential nulls
-                const grades = safeArray(config.exam_grades || []);
-                const schools = safeArray(config.participating_schools || []);
-                setExamGrades(grades.join(","));
-                setParticipatingSchools(schools.join("\n"));
+                setUseAll(config.useAll ?? true);
+                setSchools(config.schools || []);
             }
         } catch (err) {
             console.error("Failed to load config", err);
@@ -198,21 +197,20 @@ export default function AnalysisPipelinePage() {
         }
     };
 
-    const handleSaveConfig = async () => {
-        setConfigSaving(true);
-        try {
-            const grades = examGrades.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-            const schools = participatingSchools.split("\n").map(s => s.trim()).filter(s => s.length > 0);
 
+
+    const handleSaveConfig = async () => {
+        try {
+            setConfigSaving(true);
             await updatePipelineConfig({
-                exam_grades: grades,
-                participating_schools: schools
+                useAll,
+                schools
             });
             alert("Configuration saved!");
-        } catch (err) {
-            console.error("Failed to save config", err);
+            setConfigSaving(false);
+        } catch (error) {
+            console.error(error);
             alert("Failed to save configuration");
-        } finally {
             setConfigSaving(false);
         }
     };
@@ -446,46 +444,51 @@ export default function AnalysisPipelinePage() {
                 </div>
             </section>
 
+
             {/* Config Section */}
             <section className="mb-12 bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2 text-gray-800">
+                <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2 text-gray-800">
                     <Settings className="text-gray-600" />
                     Configuration
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Exam Grades (comma - separated)
-                        </label>
+
+                <div className="mb-6">
+                    <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
                         <input
-                            type="text"
-                            value={examGrades}
-                            onChange={(e) => setExamGrades(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="5,6,7,8,9,10,11,12"
+                            type="checkbox"
+                            checked={useAll}
+                            onChange={(e) => setUseAll(e.target.checked)}
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                         />
-                        <p className="mt-1 text-xs text-gray-500">Example: 5,6,7,8,9,10,11,12</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Participating Schools (one per line)
-                        </label>
-                        <textarea
-                            value={participatingSchools}
-                            onChange={(e) => setParticipatingSchools(e.target.value)}
-                            rows={4}
-                            className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="School A&#10;School B"
-                        />
-                    </div>
+                        <div>
+                            <span className="block font-semibold text-gray-800">Use ALL Schools and ALL Grades</span>
+                            <span className="block text-sm text-gray-500">
+                                Automatically include every school and grade found in the uploaded data.
+                            </span>
+                        </div>
+                    </label>
                 </div>
-                <div className="mt-4 flex justify-end">
+
+                {!useAll && (
+                    <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
+                        <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Define specific schools and their grade ranges to include.
+                        </p>
+                        <SchoolConfigList
+                            configs={schools}
+                            onChange={setSchools}
+                        />
+                    </div>
+                )}
+
+                <div className="mt-8 flex justify-end">
                     <button
                         onClick={handleSaveConfig}
                         disabled={configSaving}
-                        className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 flex items-center gap-2 disabled:opacity-50"
+                        className="px-6 py-2 bg-gray-900 text-white rounded hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors font-medium shadow-sm"
                     >
-                        <Save size={16} />
+                        <Save size={18} />
                         {configSaving ? "Saving..." : "Save Configuration"}
                     </button>
                 </div>

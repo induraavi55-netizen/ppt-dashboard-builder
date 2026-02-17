@@ -192,7 +192,12 @@ export const uploadPipelineData = async (file: File) => {
     return res.data;
 };
 
-export const updatePipelineConfig = async (config: { exam_grades: number[], participating_schools: string[] }) => {
+export const updatePipelineConfig = async (config: {
+    useAll?: boolean;
+    schools?: any[];
+    exam_grades?: number[];
+    participating_schools?: string[];
+}) => {
     const res = await api.post("/pipeline/config", config);
     return res.data;
 };

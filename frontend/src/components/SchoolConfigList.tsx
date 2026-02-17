@@ -1,0 +1,50 @@
+import { Plus } from "lucide-react";
+import { SchoolConfigRow, type SchoolConfig } from "./SchoolConfigRow";
+
+interface Props {
+    configs: SchoolConfig[];
+    onChange: (configs: SchoolConfig[]) => void;
+}
+
+export function SchoolConfigList({ configs, onChange }: Props) {
+    const handleAdd = () => {
+        onChange([
+            ...configs,
+            { schoolName: "", fromGrade: 5, toGrade: 10 }
+        ]);
+    };
+
+    const handleUpdate = (index: number, newConfig: SchoolConfig) => {
+        const next = [...configs];
+        next[index] = newConfig;
+        onChange(next);
+    };
+
+    const handleRemove = (index: number) => {
+        const next = configs.filter((_, i) => i !== index);
+        onChange(next);
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="space-y-3">
+                {configs.map((cfg, idx) => (
+                    <SchoolConfigRow
+                        key={idx}
+                        config={cfg}
+                        onChange={(newCfg) => handleUpdate(idx, newCfg)}
+                        onRemove={() => handleRemove(idx)}
+                    />
+                ))}
+            </div>
+
+            <button
+                onClick={handleAdd}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+            >
+                <Plus size={16} />
+                Add School
+            </button>
+        </div>
+    );
+}

@@ -29,8 +29,17 @@ from app.core.pipeline_config import PIPELINE_CONFIG
 
 @router.post("/config")
 def update_pipeline_config(config: PipelineConfig):
-    PIPELINE_CONFIG["exam_grades"] = config.exam_grades
-    PIPELINE_CONFIG["participating_schools"] = config.participating_schools
+    # Update new fields
+    PIPELINE_CONFIG["useAll"] = config.useAll
+    # Store schools as list of dicts
+    PIPELINE_CONFIG["schools"] = [s.dict() for s in config.schools]
+    
+    # Legacy fields (update if provided)
+    if config.exam_grades is not None:
+        PIPELINE_CONFIG["exam_grades"] = config.exam_grades
+    if config.participating_schools is not None:
+        PIPELINE_CONFIG["participating_schools"] = config.participating_schools
+        
     return {"status": "ok", "config": PIPELINE_CONFIG}
 
 

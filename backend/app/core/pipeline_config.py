@@ -4,6 +4,9 @@
 # It is imported by both the API (to update it) and the Pipeline Steps (to read it).
 
 PIPELINE_CONFIG = {
+    "useAll": True,
+    "schools": [],
+    # Keep legacy for compatibility if needed internally, but new logic uses above
     "exam_grades": [5,6,7,8,9,10,11,12],
     "participating_schools": []
 }
