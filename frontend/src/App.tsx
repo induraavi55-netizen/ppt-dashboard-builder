@@ -15,6 +15,8 @@ declare global {
   }
 }
 
+import { PipelineConfigProvider } from "./core/PipelineConfigProvider";
+
 function App() {
   // Initialize debug object
   useEffect(() => {
@@ -24,20 +26,21 @@ function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-          <ErrorBoundary>
-            <Routes>
-              <Route path="/" element={<AnalysisPipelinePage />} />
-              <Route path="/upload" element={<UploadPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-            </Routes>
-          </ErrorBoundary>
-        </div>
-      </BrowserRouter>
-    </QueryClientProvider>
-  );
+    <PipelineConfigProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<AnalysisPipelinePage />} />
+                <Route path="/upload" element={<UploadPage />} />
+                <Route path="/dashboard" element={<DashboardPage />} />
+              </Routes>
+            </ErrorBoundary>
+          </div>
+        </BrowserRouter>
+      </QueryClientProvider>
+      );
 }
 
-export default App;
+      export default App;

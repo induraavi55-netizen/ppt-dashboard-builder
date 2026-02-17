@@ -13,6 +13,7 @@ import { type PipelineConfig } from "../config/defaultPipelineConfig";
 import { SchoolConfigList } from "../components/SchoolConfigList";
 import { DEFAULT_PIPELINE_CONFIG } from "../config/defaultPipelineConfig";
 import { normalizePipelineConfig } from "../utils/normalizePipelineConfig";
+import { usePipelineConfig } from "../core/PipelineConfigProvider";
 
 export default function AnalysisPipelinePage() {
     const navigate = useNavigate();
@@ -50,9 +51,15 @@ export default function AnalysisPipelinePage() {
     // Config State
     // Config State
     // Config State
-    const [config, setConfig] = useState<PipelineConfig>(DEFAULT_PIPELINE_CONFIG);
-    const [configLoading, setConfigLoading] = useState(true);
+    // Config State - Local form state initialized from global context
+    const globalConfig = usePipelineConfig();
+    const [formConfig, setFormConfig] = useState<PipelineConfig>(globalConfig);
     const [configSaving, setConfigSaving] = useState(false);
+
+    // Sync form if global config updates (e.g. re-fetch)
+    useEffect(() => {
+        setFormConfig(globalConfig);
+    }, [globalConfig]);
 
     // Run All State
     const [runAllLogs, setRunAllLogs] = useState<string[]>([]);
@@ -86,23 +93,10 @@ export default function AnalysisPipelinePage() {
         }
     };
 
-    const loadConfig = async () => {
-        try {
-            setConfigLoading(true);
-            const data = await getPipelineConfig();
-            if (data) {
-                setConfig(normalizePipelineConfig(data));
-            }
-        } catch (err) {
-            console.error("Failed to load config", err);
-        } finally {
-            setConfigLoading(false);
-        }
-    }
+    // loadConfig removed - handled by PipelineConfigProvider
 
     useEffect(() => {
         checkFiles();
-        loadConfig();
     }, []);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,8 +205,8 @@ export default function AnalysisPipelinePage() {
             // Map snake_case (internal) to camelCase (backend legacy)
             // TODO: Update backend to accept snake_case
             await updatePipelineConfig({
-                useAll: config.use_all,
-                schools: config.schools.map(s => ({
+                useAll: formConfig.use_all,
+                schools: formConfig.schools.map(s => ({
                     schoolName: s.school_name,
                     fromGrade: s.from_grade,
                     toGrade: s.to_grade
@@ -462,59 +456,54 @@ export default function AnalysisPipelinePage() {
                 <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2 text-gray-800">
                     <Settings className="text-gray-600" />
                     Configuration
-                    {configLoading && <Loader2 className="animate-spin ml-2 text-gray-400" size={20} />}
                 </h2>
 
-                {configLoading ? (
-                    <div className="py-8 text-center text-gray-500 italic">Loading configuration...</div>
-                ) : (
-                    <>
-                        <div className="mb-6">
-                            <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
-                                <input
-                                    type="checkbox"
-                                    checked={config.use_all}
-                                    onChange={(e) => setConfig({ ...config, use_all: e.target.checked })}
-                                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                                />
-                                <div>
-                                    <span className="block font-semibold text-gray-800">Use ALL Schools and ALL Grades</span>
-                                    <span className="block text-sm text-gray-500">
-                                        Automatically include every school and grade found in the uploaded data.
-                                    </span>
-                                </div>
-                            </label>
+                <div className="mb-6">
+                    <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
+                        <input
+                            type="checkbox"
+                            checked={formConfig.use_all}
+                            onChange={(e) => setFormConfig({ ...formConfig, use_all: e.target.checked })}
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <div>
+                            <span className="block font-semibold text-gray-800">Use ALL Schools and ALL Grades</span>
+                            <span className="block text-sm text-gray-500">
+                                Automatically include every school and grade found in the uploaded data.
+                            </span>
                         </div>
+                    </label>
+                </div>
 
-                        {!config.use_all && (
-                            <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
-                                <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
-                                <p className="text-sm text-gray-600 mb-4">
-                                    Define specific schools and their grade ranges to include.
-                                </p>
-                                <SchoolConfigList
-                                    configs={config.schools || []}
-                                    onChange={(newSchools) => setConfig({ ...config, schools: newSchools })}
-                                />
-                            </div>
-                        )}
-
-                        <div className="mt-8 flex justify-end">
-                            <button
-                                onClick={handleSaveConfig}
-                                disabled={configSaving || configLoading}
-                                className="px-6 py-2 bg-gray-900 text-white rounded hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors font-medium shadow-sm"
-                            >
-                                <Save size={18} />
-                                {configSaving ? "Saving..." : "Save Configuration"}
-                            </button>
-                        </div>
-                    </>
+                {!formConfig.use_all && (
+                    <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
+                        <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Define specific schools and their grade ranges to include.
+                        </p>
+                        <SchoolConfigList
+                            configs={formConfig.schools || []}
+                            onChange={(newSchools) => setFormConfig({ ...formConfig, schools: newSchools })}
+                        />
+                    </div>
                 )}
-            </section>
 
-            {/* Participation Section */}
-            <section className={`mb-12 bg-blue-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className="mt-8 flex justify-end">
+                    <button
+                        onClick={handleSaveConfig}
+                        disabled={configSaving}
+                        className="px-6 py-2 bg-gray-900 text-white rounded hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors font-medium shadow-sm"
+                    >
+                        <Save size={18} />
+                        {configSaving ? "Saving..." : "Save Configuration"}
+                    </button>
+                </button>
+        </div>
+            </section >
+
+        {/* Participation Section */ }
+        < section className = {`mb-12 bg-blue-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`
+}>
                 <h2 className="text-2xl font-semibold mb-4 text-blue-900">
                     📊 Participation Analysis
                 </h2>
@@ -530,10 +519,10 @@ export default function AnalysisPipelinePage() {
                 />
 
 
-            </section>
+            </section >
 
-            {/* Performance Section */}
-            <section className={`mb-12 bg-green-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`}>
+    {/* Performance Section */ }
+    < section className = {`mb-12 bg-green-50 p-6 rounded-lg transition-opacity ${!uploaded ? 'opacity-50 pointer-events-none' : ''}`}>
                 <h2 className="text-2xl font-semibold mb-4 text-green-900">
                     📈 Performance Analysis
                 </h2>
@@ -612,26 +601,28 @@ export default function AnalysisPipelinePage() {
                         </div>
                     ))}
                 </div>
-            </section>
+            </section >
 
-            {/* Finalize Section */}
-            {pipeline?.final_file_ready && (
-                <section className="bg-purple-50 p-6 rounded-lg border-2 border-purple-300">
-                    <h2 className="text-2xl font-semibold mb-4 text-purple-900">
-                        ✅ Pipeline Complete
-                    </h2>
-                    <p className="text-gray-700 mb-4">
-                        Final dataset ready: <code className="bg-white px-2 py-1 rounded">uploadable data.xlsx</code>
-                    </p>
-                    <button
-                        onClick={handleFinalize}
-                        disabled={finalizing}
-                        className="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
-                    >
-                        {finalizing ? 'Processing...' : '👉 Use Final Dataset for PPT'}
-                    </button>
-                </section>
-            )}
-        </div>
+    {/* Finalize Section */ }
+{
+    pipeline?.final_file_ready && (
+        <section className="bg-purple-50 p-6 rounded-lg border-2 border-purple-300">
+            <h2 className="text-2xl font-semibold mb-4 text-purple-900">
+                ✅ Pipeline Complete
+            </h2>
+            <p className="text-gray-700 mb-4">
+                Final dataset ready: <code className="bg-white px-2 py-1 rounded">uploadable data.xlsx</code>
+            </p>
+            <button
+                onClick={handleFinalize}
+                disabled={finalizing}
+                className="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
+            >
+                {finalizing ? 'Processing...' : '👉 Use Final Dataset for PPT'}
+            </button>
+        </section>
+    )
+}
+        </div >
     );
 }
