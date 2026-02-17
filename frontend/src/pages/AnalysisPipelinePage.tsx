@@ -76,9 +76,11 @@ export default function AnalysisPipelinePage() {
 
     // Sync form if global config updates (e.g. re-fetch)
     useEffect(() => {
-        setFormConfig(prev => {
-            if (!globalConfig) return prev;
-            return globalConfig;
+        if (!globalConfig) return;
+
+        setFormConfig({
+            use_all: globalConfig.use_all ?? true,
+            schools: globalConfig.schools ?? []
         });
     }, [globalConfig]);
 
@@ -498,7 +500,7 @@ export default function AnalysisPipelinePage() {
                     </label>
                 </div>
 
-                {!formConfig.use_all && (
+                {formConfig.use_all === false && (
                     <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
                         <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
                         <p className="text-sm text-gray-600 mb-4">
