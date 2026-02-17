@@ -26,11 +26,47 @@ DATA_DIR = Path("data")
 FILE = DATA_DIR / "REG VS PART.xlsx"
 SHEET = "Assessment Participation"
 
-# ... (Load raw, header, fix columns, drop total - same as before) ...
-# I will retain lines 24-68 (loading) as they are fine. 
-# I am targeting the FILTERING logic (lines 83-102) and CONFIG (lines 16-18)
+# -----------------------------
+# LOAD RAW (TWO HEADER ROWS)
+# -----------------------------
 
-# ...
+raw = pd.read_excel(FILE, sheet_name=SHEET, header=None)
+
+# real data starts from row index 2
+df = raw.iloc[2:].copy()
+
+# second row contains grade numbers
+header_row = raw.iloc[1]
+
+cols = list(header_row)
+
+# fix first columns
+cols[0] = "S.No"
+cols[1] = "School Name"
+cols[2] = "District"
+
+# totals
+cols[15] = "Total Registered"
+cols[28] = "Total Participated"
+
+# last two
+cols[-2] = "Contact Name"
+cols[-1] = "Contact Phone"
+
+df.columns = cols
+
+JobLogger.log("\n===== DEBUG: ASSIGNED COLUMNS =====")
+for i, c in enumerate(df.columns):
+    JobLogger.log(f"{i} {c}")
+
+# drop total row
+df = df[df["School Name"].astype(str).str.lower() != "total"]
+
+JobLogger.log("\n===== DEBUG: DF SHAPE AFTER DROP TOTAL =====")
+JobLogger.log(str(df.shape))
+
+JobLogger.log("\n===== DEBUG: SCHOOL NAMES =====")
+JobLogger.log(str(df["School Name"].unique()))
 
 # -----------------------------
 # IDENTIFY GRADE COLUMN INDEXES
@@ -77,7 +113,45 @@ else:
 # -----------------------------
 # SCHOOL TOTALS (SAFE)
 # -----------------------------
-# ... lines 104+ can remain similar ...
+
+school_totals = df_filt[["School Name"]].copy()
+
+school_totals["Registered"] = df_filt.iloc[:, reg_idx].sum(axis=1)
+school_totals["Participated"] = df_filt.iloc[:, part_idx].sum(axis=1)
+
+school_totals["Not Participated"] = (
+    school_totals["Registered"] - school_totals["Participated"]
+)
+
+school_totals = school_totals[
+    ["School Name", "Participated", "Not Participated", "Registered"]
+]
+
+JobLogger.log("\n===== DEBUG: SCHOOL TOTALS =====")
+JobLogger.log(str(school_totals))
+
+# -----------------------------
+# OVERALL GRADE TOTALS
+# -----------------------------
+
+overall = pd.DataFrame({
+    "Grade": [reg_grade_map[i] for i in reg_idx],
+    "Registered": df_filt.iloc[:, reg_idx].sum().values,
+    "Participated": df_filt.iloc[:, part_idx].sum().values,
+})
+
+overall["Registered"] = pd.to_numeric(overall["Registered"], errors="coerce").fillna(0)
+overall["Participated"] = pd.to_numeric(overall["Participated"], errors="coerce").fillna(0)
+
+overall["Participation %"] = (
+    (overall["Participated"] / overall["Registered"]) * 100
+).fillna(0) # Handle 0/0 -> NaN
+
+# Handle x/0 -> inf
+overall["Participation %"] = overall["Participation %"].replace([np.inf, -np.inf], 0)
+
+# Now safe to cast
+overall["Participation %"] = overall["Participation %"].round(0).astype(int)
 
 
 
