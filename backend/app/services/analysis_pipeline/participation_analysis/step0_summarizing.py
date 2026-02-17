@@ -98,17 +98,19 @@ JobLogger.log(f"===== DEBUG: PART IDX ===== {part_idx}")
 
 df["School Name"] = df["School Name"].astype(str).str.strip()
 
-if not USE_ALL:
-    # Filter by configured schools
-    allowed_names = {s["schoolName"].lower() for s in SCHOOLS_CONFIG}
-    JobLogger.log(f"Filtering for {len(allowed_names)} schools")
-    df_filt = df[
-        df["School Name"].str.lower().isin(allowed_names)
-    ]
+from app.services.analysis_pipeline.utils.config_filter import apply_pipeline_config_filter
+
+df["School Name"] = df["School Name"].astype(str).str.strip()
+
+# Apply Strict Pipeline Filter (School + Grade)
+# Note: Since this is wide format (Grades as columns), the function will only filter Schools.
+# The Grade masking logic below handles the columns.
+df_filt = apply_pipeline_config_filter(df, PIPELINE_CONFIG)
+
+if USE_ALL:
+    JobLogger.log("Using ALL schools (Default) - Filter check passed")
 else:
-    # Use ALL schools
-    JobLogger.log("Using ALL schools (Default)")
-    df_filt = df.copy()
+    JobLogger.log(f"Filtered schools. Rows: {len(df_filt)}")
 
     # -----------------------------
     # GRADE RANGE MASKING

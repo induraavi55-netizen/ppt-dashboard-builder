@@ -58,6 +58,14 @@ def run_step0():
                 
                 df = pd.read_excel(xls, sheet_name=sheet)
                 
+                # Apply Strict Pipeline Filter
+                from app.services.analysis_pipeline.utils.config_filter import apply_pipeline_config_filter
+                df = apply_pipeline_config_filter(df, PIPELINE_CONFIG)
+
+                if df.empty:
+                    JobLogger.log(f"  Skipping sheet {sheet} (Filtered out)")
+                    continue
+                
                 # Store raw
                 state["raw"][input_file.name][sheet] = df
 
