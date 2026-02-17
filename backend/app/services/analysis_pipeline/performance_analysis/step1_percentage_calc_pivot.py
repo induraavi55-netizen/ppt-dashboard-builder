@@ -63,14 +63,20 @@ def run_step1():
             
             # Handle potential infinities
             df["Performance (%)"] = df["Performance (%)"].replace([np.inf, -np.inf], 0)
-            df["Performance (%)"] = df["Performance (%)"].round(0).astype(int)
+            df["Performance (%)"] = df["Performance (%)"].fillna(0).round(0).astype(int)
             
             # Save updated df to step1
             state["step1"][filename][sheet_name] = df
             
             # ---- collect pivot info ----
             base_name = sheet_name.replace("_formatted", "")
-            avg_perf = round(df["Performance (%)"].mean(), 0)
+            
+            # Safe mean calculation
+            mean_val = df["Performance (%)"].mean()
+            if pd.isna(mean_val):
+                mean_val = 0
+                
+            avg_perf = round(mean_val, 0)
             
             pivot_rows.append({
                 "Sheet": base_name,

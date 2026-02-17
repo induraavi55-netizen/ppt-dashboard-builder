@@ -153,7 +153,13 @@ overall["Participation %"] = overall["Participation %"].replace([np.inf, -np.inf
 # Now safe to cast
 overall["Participation %"] = overall["Participation %"].round(0).astype(int)
 
-
+# -----------------------------
+# DYNAMIC GRADE FILTERING
+# -----------------------------
+# Remove grades with 0 registered students (not relevant for the filtered schools)
+JobLogger.log(f"Grades before filtering: {overall['Grade'].tolist()}")
+overall = overall[overall["Registered"] > 0]
+JobLogger.log(f"Grades after filtering (Registered > 0): {overall['Grade'].tolist()}")
 
 JobLogger.log("\n===== DEBUG: OVERALL =====")
 JobLogger.log(str(overall))
