@@ -11,6 +11,7 @@ import { FileCode, Folder, Upload, AlertCircle, CheckCircle2, Settings, Play, Sa
 import { validatePipeline, safeArray } from '../utils/pipelineValidation';
 import { type SchoolConfig } from "../components/SchoolConfigRow";
 import { SchoolConfigList } from "../components/SchoolConfigList";
+import { DEFAULT_PIPELINE_CONFIG } from "../utils/defaultPipelineConfig";
 
 export default function AnalysisPipelinePage() {
     const navigate = useNavigate();
@@ -46,8 +47,8 @@ export default function AnalysisPipelinePage() {
     const [finalizing, setFinalizing] = useState(false);
 
     // Config State
-    const [useAll, setUseAll] = useState(true);
-    const [schools, setSchools] = useState<SchoolConfig[]>([]);
+    const [config, setConfig] = useState(DEFAULT_PIPELINE_CONFIG);
+    const [configLoading, setConfigLoading] = useState(true);
     const [configSaving, setConfigSaving] = useState(false);
 
     // Run All State
@@ -84,13 +85,18 @@ export default function AnalysisPipelinePage() {
 
     const loadConfig = async () => {
         try {
-            const config = await getPipelineConfig();
-            if (config) {
-                setUseAll(config.useAll ?? true);
-                setSchools(config.schools || []);
+            setConfigLoading(true);
+            const data = await getPipelineConfig();
+            if (data) {
+                setConfig({
+                    useAll: data.useAll ?? true,
+                    schools: data.schools || []
+                });
             }
         } catch (err) {
             console.error("Failed to load config", err);
+        } finally {
+            setConfigLoading(false);
         }
     }
 
@@ -203,8 +209,8 @@ export default function AnalysisPipelinePage() {
         try {
             setConfigSaving(true);
             await updatePipelineConfig({
-                useAll,
-                schools
+                useAll: config.useAll,
+                schools: config.schools
             });
             alert("Configuration saved!");
             setConfigSaving(false);
@@ -456,8 +462,8 @@ export default function AnalysisPipelinePage() {
                     <label className="flex items-center gap-3 p-4 border rounded hover:bg-gray-50 cursor-pointer transition-colors">
                         <input
                             type="checkbox"
-                            checked={useAll}
-                            onChange={(e) => setUseAll(e.target.checked)}
+                            checked={config.useAll}
+                            onChange={(e) => setConfig({ ...config, useAll: e.target.checked })}
                             className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                         />
                         <div>
@@ -469,15 +475,15 @@ export default function AnalysisPipelinePage() {
                     </label>
                 </div>
 
-                {!useAll && (
+                {!config.useAll && (
                     <div className="mt-6 border-t pt-6 animate-in fade-in duration-300">
                         <h3 className="text-lg font-medium text-gray-800 mb-4">Participating Schools</h3>
                         <p className="text-sm text-gray-600 mb-4">
                             Define specific schools and their grade ranges to include.
                         </p>
                         <SchoolConfigList
-                            configs={schools}
-                            onChange={setSchools}
+                            configs={config.schools || []}
+                            onChange={(newSchools) => setConfig({ ...config, schools: newSchools })}
                         />
                     </div>
                 )}
