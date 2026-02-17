@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { PipelineStepButton } from '../components/PipelineStepButton';
 
@@ -7,11 +7,26 @@ import { fetchStepOutput, getPipelineFiles, uploadData, uploadPipelineData, upda
 import { useNavigate } from 'react-router-dom';
 import { LogViewer } from '../components/LogViewer';
 import { DataPreview } from '../components/DataPreview';
-import { FileCode, Folder, Upload, AlertCircle, CheckCircle2, Settings, Play, Save } from 'lucide-react';
+import { FileCode, Folder, Upload, AlertCircle, CheckCircle2, Settings, Play, Save, Loader2 } from 'lucide-react';
+import { validatePipeline, safeArray } from '../utils/pipelineValidation';
 
 export default function AnalysisPipelinePage() {
     const navigate = useNavigate();
     const { state, refresh } = usePipelineState();
+
+    // Debug Instrumentation
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            window.pipelineDebug = state;
+            if (state) {
+                const validation = validatePipeline(state);
+                console.groupCollapsed("Pipeline Debug Update");
+                console.log("State:", state);
+                console.log("Validation:", validation);
+                console.groupEnd();
+            }
+        }
+    }, [state]);
 
     // Upload & Files State
     const [files, setFiles] = useState<string[]>([]);
@@ -33,14 +48,20 @@ export default function AnalysisPipelinePage() {
     const [runningAll, setRunningAll] = useState(false);
     const [currentStep, setCurrentStep] = useState<number | null>(null);
 
+    // Derived States with Safeguards
+    const pipelineValid = useMemo(() => {
+        if (!state) return false;
+        return validatePipeline(state).valid;
+    }, [state]);
+
     // Initial check for existing files - Backend is source of truth
     const checkFiles = async () => {
         try {
             const data = await getPipelineFiles();
             // Strict sync: overwrite state completely
             // Backend now returns uploaded=false if required files are missing
-            if (data.uploaded) {
-                setFiles(data.files || []);
+            if (data && data.uploaded) {
+                setFiles(safeArray(data.files));
                 setUploaded(true);
             } else {
                 setFiles([]);
@@ -56,8 +77,13 @@ export default function AnalysisPipelinePage() {
     const loadConfig = async () => {
         try {
             const config = await getPipelineConfig();
-            setExamGrades(config.exam_grades.join(","));
-            setParticipatingSchools(config.participating_schools.join("\n"));
+            if (config) {
+                // Safe access to potential nulls
+                const grades = safeArray(config.exam_grades || []);
+                const schools = safeArray(config.participating_schools || []);
+                setExamGrades(grades.join(","));
+                setParticipatingSchools(schools.join("\n"));
+            }
         } catch (err) {
             console.error("Failed to load config", err);
         }
@@ -92,13 +118,13 @@ export default function AnalysisPipelinePage() {
             console.log("Upload response:", res);
 
             // 2. Strict Branching
-            if (res.success) {
+            if (res && res.success) {
                 // Determine truth from backend again
                 console.log("Calling /pipeline/data-files...");
                 await checkFiles();
                 setSelectedFile(null); // Optional: clear input
             } else {
-                throw new Error(res.error || "Upload failed (unknown error)");
+                throw new Error((res && res.error) || "Upload failed (unknown error)");
             }
 
         } catch (err: any) {
@@ -151,7 +177,7 @@ export default function AnalysisPipelinePage() {
 
             console.log("Upload response:", res);
 
-            if (!res.project_id) {
+            if (!res || !res.project_id) {
                 console.error("Missing project_id in response", res);
                 throw new Error("Server returned no project_id");
             }
@@ -219,12 +245,21 @@ export default function AnalysisPipelinePage() {
                 // for (let i = 0; i <= 5; i++) {
                 //     setCurrentStep(i);
                 const res = await runPipelineStep(`performance-${i}`);
-                const jobId = res.job_id;
+                const jobId = res?.job_id;
+
+                if (!jobId) throw new Error("No job ID returned from step " + i);
 
                 // Poll until complete
                 while (true) {
                     await new Promise(r => setTimeout(r, 1000)); // 1s delay
                     const statusData = await getPipelineStatus(jobId);
+
+                    if (!statusData) {
+                        // Should not happen, but safe guard
+                        console.warn("Got null status data, retrying...");
+                        continue;
+                    }
+
                     const status = statusData.status;
 
                     // Update logs if available
@@ -255,8 +290,9 @@ export default function AnalysisPipelinePage() {
                         break;
                     }
                     if (status === 'failed') {
-                        setRunAllLogs(prev => [...prev, `❌ Step ${i} Failed: ${statusData.error_message}`]);
-                        throw new Error(`Step ${i} failed: ${statusData.error_message}`);
+                        const errMsg = statusData.error_message || "Unknown error";
+                        setRunAllLogs(prev => [...prev, `❌ Step ${i} Failed: ${errMsg}`]);
+                        throw new Error(`Step ${i} failed: ${errMsg}`);
                     }
                 }
 
@@ -268,7 +304,7 @@ export default function AnalysisPipelinePage() {
 
         } catch (err: any) {
             console.error("Run All failed", err);
-            let msg = err.message;
+            let msg = err.message || "Unknown error";
             if (err.response?.data?.detail) {
                 msg = err.response.data.detail;
             }
@@ -282,6 +318,7 @@ export default function AnalysisPipelinePage() {
 
     // Helper to identify important files
     const isImportantFile = (name: string) => {
+        if (!name) return false;
         if (name === 'REG VS PART.xlsx') return true;
         if (/^Grade\s\d+\.xlsx$/.test(name)) return true;
         if (name.includes('uploadable data.xlsx')) return true;
@@ -291,6 +328,23 @@ export default function AnalysisPipelinePage() {
     return (
         <div className="container mx-auto p-6 max-w-6xl">
             <h1 className="text-3xl font-bold mb-8">Analysis Pipeline</h1>
+
+            {/* Degraded State Warning */}
+            {state && !pipelineValid && (
+                <div className="mb-8 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r shadow-sm">
+                    <div className="flex items-center">
+                        <AlertCircle className="h-6 w-6 text-yellow-600 mr-3" />
+                        <div>
+                            <p className="font-bold text-yellow-700">Pipeline Data Warning</p>
+                            <p className="text-sm text-yellow-600">
+                                The pipeline state appears to be malformed or incomplete. Some features may be unavailable.
+                                <br />
+                                <span className="font-mono text-xs opacity-75">Debug info available in console (window.pipelineDebug)</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Upload Section */}
             <section className="mb-12 bg-gray-50 p-6 rounded-lg border border-gray-200">
@@ -323,8 +377,17 @@ export default function AnalysisPipelinePage() {
                                     disabled={!selectedFile || uploading}
                                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
-                                    {uploading ? 'Uploading...' : 'Upload'}
-                                    <Upload size={16} />
+                                    {uploading ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            Uploading...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload size={16} />
+                                            Upload
+                                        </>
+                                    )}
                                 </button>
                             </div>
                             {uploadError && (
@@ -346,7 +409,7 @@ export default function AnalysisPipelinePage() {
                         </h3>
                         {files.length === 0 ? (
                             <div className="text-gray-400 italic text-sm">
-                                No files detected. Please upload a ZIP file.
+                                {uploading ? "Scanning..." : "No files detected. Please upload a ZIP file."}
                             </div>
                         ) : (
                             <ul className="space-y-2">
@@ -512,7 +575,7 @@ export default function AnalysisPipelinePage() {
             </section>
 
             {/* Finalize Section */}
-            {state?.final_file_ready && (
+            {state && state.final_file_ready && (
                 <section className="bg-purple-50 p-6 rounded-lg border-2 border-purple-300">
                     <h2 className="text-2xl font-semibold mb-4 text-purple-900">
                         ✅ Pipeline Complete

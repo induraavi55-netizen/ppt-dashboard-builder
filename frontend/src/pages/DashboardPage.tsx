@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Dataset } from "../types";
@@ -8,53 +8,7 @@ import { Card, CardHeader, CardContent } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
 import { AlertCircle, CheckCircle, FileText, Download, Upload } from "lucide-react";
 import { cn } from "../lib/utils";
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
-    constructor(props: any) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
-    static getDerivedStateFromError(error: Error) {
-        return { hasError: true, error };
-    }
-    componentDidCatch(error: Error, errorInfo: any) {
-        console.error("Dashboard Crash:", error, errorInfo);
-    }
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
-                    <div className="max-w-xl w-full bg-white p-8 rounded-lg shadow-lg border border-red-100 text-center">
-                        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                        <h1 className="text-xl font-bold text-gray-900">Dashboard Crashed</h1>
-                        <p className="text-gray-500 mt-2 text-sm">
-                            An unexpected error occurred while rendering the dashboard.
-                        </p>
-
-                        <div className="mt-6 text-left">
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Error Details</div>
-                            <pre className="p-3 bg-red-50 text-red-900 rounded text-xs overflow-auto whitespace-pre-wrap max-h-48 border border-red-200 font-mono">
-                                {this.state.error?.message}
-                                {"\n"}
-                                {this.state.error?.stack?.split("\n").slice(0, 3).join("\n")}
-                            </pre>
-                        </div>
-
-                        <div className="mt-8 flex justify-center gap-4">
-                            <Button onClick={() => window.location.href = "/"} variant="secondary">
-                                Return to Home
-                            </Button>
-                            <Button onClick={() => window.location.reload()} variant="primary">
-                                Reload Page
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-        return this.props.children;
-    }
-}
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 
 function DashboardContent() {
     const location = useLocation();

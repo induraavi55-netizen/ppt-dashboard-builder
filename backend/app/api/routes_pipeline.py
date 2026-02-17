@@ -453,7 +453,36 @@ async def export_step_output(step_name: str):
 
 @router.get("/state")
 async def get_pipeline_state(db: Session = Depends(get_db)):
-    return orchestrator.get_pipeline_state(db)
+    """
+    Returns the current pipeline state.
+    SAFE GUARDED: Always returns a valid JSON structure.
+    """
+    try:
+        state = orchestrator.get_pipeline_state(db)
+        # Ensure a minimal safe structure
+        safe_response = state if state else {}
+        
+        # Ensure analysis key exists
+        if "analysis" not in safe_response or safe_response["analysis"] is None:
+             safe_response["analysis"] = {"steps": [], "status": "unknown"}
+             
+        # Ensure analysis.steps is a list
+        if "steps" not in safe_response["analysis"] or not isinstance(safe_response["analysis"]["steps"], list):
+             safe_response["analysis"]["steps"] = []
+             
+        return safe_response
+        
+    except Exception as e:
+        print(f"Error fetching pipeline state: {e}")
+        # Return fallback safe state instead of 500
+        return {
+            "status": "error",
+            "error": str(e),
+            "analysis": {
+                "steps": [],
+                "status": "error"
+            }
+        }
 
 @router.post("/finalize")
 async def finalize_pipeline(db: Session = Depends(get_db)):
