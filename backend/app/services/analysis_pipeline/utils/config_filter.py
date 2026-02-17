@@ -4,7 +4,7 @@ import logging
 def apply_pipeline_config_filter(df: pd.DataFrame, config):
     """
     Applies strict filtering based on the pipeline configuration.
-    Filters by SchoolName and Grade range.
+    Filters by SchoolName (case-insensitive, whitespace-safe) and Grade range.
     """
     # Safety guard
     if df is None or df.empty:
@@ -33,22 +33,36 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
     if "SchoolName" not in df.columns:
         print("Warning: 'SchoolName' column not found in dataframe. Skipping filter.")
         return df
+        
+    # User Request: Debug Logging
+    print(f"Schools in data (first 10): {df['SchoolName'].unique()[:10]}")
+    
+    # helper to get school name from config item
+    def get_school_name(s):
+        return s.school_name if hasattr(s, "school_name") else s.get("school_name")
 
-    # Ensure Grade column is numeric
+    print(f"Config schools: {[get_school_name(s) for s in schools]}")
+
+    # Ensure Grade column is numeric if it exists
     if "Grade" in df.columns:
         df["Grade"] = pd.to_numeric(df["Grade"], errors="coerce")
-    else:
-        # If no Grade column, we can only filter by school
-        # But user requirement implies we should be filtering by grade.
-        # If the file is REG VS PART, it might be wide format (grades as columns)
-        # The user provided code assumes "Grade" column exists. 
-        # We will proceed with the user's logic but add a check.
-        pass
+
+    # CLEAN FILTERING
+    # Create temp copy
+    df = df.copy()
+
+    # Create Normalized Column
+    df["SchoolName_clean"] = (
+        df["SchoolName"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
 
     filtered_parts = []
 
     for school in schools:
-        # Handle Pydantic model or dict
+        # Resolve config values
         if hasattr(school, "school_name"):
             school_name = school.school_name
             from_grade = school.from_grade
@@ -58,32 +72,27 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
             from_grade = school.get("from_grade")
             to_grade = school.get("to_grade")
 
-        # Case insensitive matching for school name
-        # We will normalize both side to lower case and strip
-        
-        # Create a mask for the school
-        # Using string methods on the series
-        school_mask = df["SchoolName"].astype(str).str.strip().str.lower() == str(school_name).strip().lower()
+        school_name_clean = str(school_name).strip().lower()
 
-        if "Grade" in df.columns:
-            part = df[
-                (school_mask)
-                &
-                (df["Grade"] >= from_grade)
-                &
-                (df["Grade"] <= to_grade)
-            ].copy()
-        else:
-            # If no Grade column, we can only filter by school
-            part = df[school_mask].copy()
+        # Filter by School Name
+        # We use the clean column
+        mask = df["SchoolName_clean"] == school_name_clean
         
+        # Filter by Grade (If exists)
+        if "Grade" in df.columns:
+             mask = mask & (df["Grade"] >= from_grade) & (df["Grade"] <= to_grade)
+        
+        part = df[mask].copy()
+
+        print(f"Matching school '{school_name}' -> rows: {len(part)}")
         filtered_parts.append(part)
 
     if not filtered_parts:
         return df.iloc[0:0]
 
-    filtered_df = pd.concat(filtered_parts, ignore_index=True)
+    result = pd.concat(filtered_parts, ignore_index=True)
 
-    print(f"Config filter applied: {len(df)} -> {len(filtered_df)} rows")
+    print(f"Final filtered rows: {len(result)}")
 
-    return filtered_df
+    # Cleanup temp column
+    return result.drop(columns=["SchoolName_clean"], errors="ignore")
