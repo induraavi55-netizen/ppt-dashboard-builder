@@ -11,9 +11,12 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
         return df
 
     # Handle both object and dict access for config
-    use_all = getattr(config, "use_all", None)
+    use_all = getattr(config, "useAll", None)
+    if use_all is None: use_all = getattr(config, "use_all", None)
+    
     if use_all is None and isinstance(config, dict):
-        use_all = config.get("use_all")
+        use_all = config.get("useAll")
+        if use_all is None: use_all = config.get("use_all")
     
     if use_all:
         return df
@@ -28,6 +31,7 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
 
     # Normalize column names if needed
     if "School Name" in df.columns and "SchoolName" not in df.columns:
+        df = df.copy() # Ensure we don't modify in-place before filtering
         df["SchoolName"] = df["School Name"]
 
     if "SchoolName" not in df.columns:
@@ -38,17 +42,22 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
     print(f"Schools in data (first 10): {df['SchoolName'].unique()[:10]}")
     
     # helper to get school name from config item
-    def get_school_name(s):
-        return s.school_name if hasattr(s, "school_name") else s.get("school_name")
+    def get_config_val(item, camel, snake, default=None):
+        val = getattr(item, camel, None)
+        if val is None: val = getattr(item, snake, None)
+        if val is None and isinstance(item, dict):
+            val = item.get(camel)
+            if val is None: val = item.get(snake)
+        return val if val is not None else default
 
-    print(f"Config schools: {[get_school_name(s) for s in schools]}")
+    print(f"Config schools: {[get_config_val(s, 'schoolName', 'school_name') for s in schools]}")
 
     # Ensure Grade column is numeric if it exists
     if "Grade" in df.columns:
         df["Grade"] = pd.to_numeric(df["Grade"], errors="coerce")
 
     # CLEAN FILTERING
-    # Create temp copy
+    # Create temp copy if not already copied
     df = df.copy()
 
     # Create Normalized Column
@@ -63,14 +72,9 @@ def apply_pipeline_config_filter(df: pd.DataFrame, config):
 
     for school in schools:
         # Resolve config values
-        if hasattr(school, "school_name"):
-            school_name = school.school_name
-            from_grade = school.from_grade
-            to_grade = school.to_grade
-        else:
-            school_name = school.get("school_name")
-            from_grade = school.get("from_grade")
-            to_grade = school.get("to_grade")
+        school_name = get_config_val(school, "schoolName", "school_name")
+        from_grade = get_config_val(school, "fromGrade", "from_grade", 0)
+        to_grade = get_config_val(school, "toGrade", "to_grade", 100)
 
         school_name_clean = str(school_name).strip().lower()
 

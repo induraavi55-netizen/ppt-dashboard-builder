@@ -18,8 +18,17 @@ def run_step0():
     state = get_pipeline_state()
     state["step0"] = {} # Initialize/Reset
     
-    USE_ALL = PIPELINE_CONFIG.get("useAll", True)
-    SCHOOLS_CONFIG = PIPELINE_CONFIG.get("schools", [])
+    def get_config_val(item, camel, snake, default=None):
+        if item is None: return default
+        val = getattr(item, camel, None)
+        if val is None: val = getattr(item, snake, None)
+        if val is None and isinstance(item, dict):
+            val = item.get(camel)
+            if val is None: val = item.get(snake)
+        return val if val is not None else default
+
+    USE_ALL = get_config_val(PIPELINE_CONFIG, "useAll", "use_all", True)
+    SCHOOLS_CONFIG = get_config_val(PIPELINE_CONFIG, "schools", "schools", [])
     
     # All Excel files in that folder
     excel_files = [
@@ -96,9 +105,9 @@ def run_step0():
                     for sc in SCHOOLS_CONFIG:
                         # Pydantic dicts: {'schoolName': '...', 'fromGrade': x, 'toGrade': y}
                         # Check grade range
-                        s_name = sc.get("schoolName", "").strip().lower()
-                        f_grade = sc.get("fromGrade", 0)
-                        t_grade = sc.get("toGrade", 100)
+                        s_name = str(get_config_val(sc, "schoolName", "school_name", "")).strip().lower()
+                        f_grade = get_config_val(sc, "fromGrade", "from_grade", 0)
+                        t_grade = get_config_val(sc, "toGrade", "to_grade", 100)
                         
                         if f_grade <= current_grade <= t_grade:
                             allowed_schools.add(s_name)

@@ -1,0 +1,82 @@
+﻿python : Traceback 
+(most recent call 
+last):
+At line:1 char:1
++ python -m app.servi
+ces.analysis_pipeline
+.participation_analys
+is.step0 ...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Traceba   
+ ck (most recent     
+call last)::Stri    
+ng) [], RemoteEx    
+ception
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+  File "<frozen 
+runpy>", line 198, 
+in 
+_run_module_as_main
+  File "<frozen 
+runpy>", line 88, in 
+_run_code
+  File "E:\ppt-dashbo
+ard-builder\backend\a
+pp\services\analysis_
+pipeline\participatio
+n_analysis\step0_summ
+arizing.py", line 
+161, in <module>
+    
+df_filt[col_name] = p
+d.to_numeric(df_filt[
+col_name], errors="co
+erce").fillna(0)
+                     
+   ^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+  File 
+"C:\Users\Raavi Indu\
+AppData\Local\Program
+s\Python\Python311\Li
+b\site-packages\panda
+s\core\tools\numeric.
+py", line 212, in 
+to_numeric
+    raise 
+TypeError("arg must 
+be a list, tuple, 
+1-d array, or 
+Series")
+TypeError: arg must 
+be a list, tuple, 
+1-d array, or Series
+
+===== DEBUG: ORIGINAL SCHOOL NAMES =====
+<StringArray>
+[                       'Total',     'Dr BR Ambedkar Gurukulam',
+ 'SPA DR BR AMBEDKAR GURUKULAM',                    'Gurukulam',
+                          'gur']
+Length: 5, dtype: str
+
+===== DEBUG: DF SHAPE AFTER DROP TOTAL =====
+(4, 31)
+
+===== DEBUG: REG IDX ===== [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+===== DEBUG: PART IDX ===== [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+Using ALL schools
+
+===== DEBUG: FILTERED SCHOOL NAMES =====
+<StringArray>
+['Dr BR Ambedkar Gurukulam', 'SPA DR BR AMBEDKAR GURUKULAM', 'Gurukulam',
+ 'gur']
+Length: 4, dtype: str

@@ -1,0 +1,8 @@
+CRASHED in main: arg must be a list, tuple, 1-d array, or Series
+Traceback (most recent call last):
+  File "E:\ppt-dashboard-builder\backend\app\services\analysis_pipeline\participation_analysis\step0_summarizing.py", line 60, in main
+    df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Raavi Indu\AppData\Local\Programs\Python\Python311\Lib\site-packages\pandas\core\tools\numeric.py", line 212, in to_numeric
+    raise TypeError("arg must be a list, tuple, 1-d array, or Series")
+TypeError: arg must be a list, tuple, 1-d array, or Series
