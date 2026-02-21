@@ -6,18 +6,12 @@ export interface Project {
 
 export interface Dataset {
     id: string;
-    project_id: string;
     name: string;
-    detected_type: string;
+    preview: Record<string, unknown>[];
     row_count: number;
     col_count: number;
-    preview: Record<string, any>[];
-    schema: any;
-    profile: {
-        type: string;
-        dataset_family: string;
-        metric_types: Record<string, string>;
-    };
+    detected_type: string;
+    profile: Record<string, unknown>;
 }
 
 export interface UploadResponse {
