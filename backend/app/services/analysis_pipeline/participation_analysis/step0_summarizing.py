@@ -8,8 +8,7 @@ from app.core.pipeline_config import PIPELINE_CONFIG
 # CONFIG
 # -----------------------------
 
-USE_ALL = PIPELINE_CONFIG.get("useAll", True)
-SCHOOLS_CONFIG = PIPELINE_CONFIG.get("schools", [])
+# Removed static evaluation of pipeline config
 
 DATA_DIR = Path("data")
 FILE = DATA_DIR / "REG VS PART.xlsx"
@@ -67,13 +66,17 @@ JobLogger.log(f"===== DEBUG: PART IDX ===== {part_idx}")
 # FILTER SCHOOLS (FIXED)
 # -----------------------------
 
+# Extract config dynamically on each run
+use_all = PIPELINE_CONFIG.get("useAll", True)
+schools_config = PIPELINE_CONFIG.get("schools", [])
+
 df_filt = df.copy()
 
-if not USE_ALL:
+if not use_all:
 
     allowed_schools = [
         sc.get("schoolName", "").strip().lower()
-        for sc in SCHOOLS_CONFIG
+        for sc in schools_config
     ]
 
     JobLogger.log(f"\n===== DEBUG: ALLOWED SCHOOLS =====")
@@ -98,11 +101,11 @@ JobLogger.log(str(df_filt["School Name"].unique()))
 # APPLY GRADE RANGE MASKING
 # -----------------------------
 
-if not USE_ALL:
+if not use_all:
 
     JobLogger.log("Applying grade range masking")
 
-    for sc in SCHOOLS_CONFIG:
+    for sc in schools_config:
 
         school = sc.get("schoolName", "").strip().lower()
         f_grade = sc.get("fromGrade", 0)
