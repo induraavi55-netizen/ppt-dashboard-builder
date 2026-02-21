@@ -8,14 +8,31 @@ interface Props {
     label: string;
     onComplete?: () => void;
     disabled?: boolean;
+    onBeforeExecute?: () => Promise<void>;
 }
 
 import { LogViewer } from './LogViewer';
 import { DataPreview } from './DataPreview';
 
-export function PipelineStepButton({ stepName, label, onComplete, disabled }: Props) {
+export function PipelineStepButton({ stepName, label, onComplete, disabled, onBeforeExecute }: Props) {
     const { execute, loading, error, completed, logs } = usePipelineStep(stepName, onComplete);
     const [exporting, setExporting] = useState(false);
+    const [preflighting, setPreflighting] = useState(false);
+
+    const handleExecute = async () => {
+        if (onBeforeExecute) {
+            try {
+                setPreflighting(true);
+                await onBeforeExecute();
+            } catch (err) {
+                console.error("Pre-execute hook failed:", err);
+                return;
+            } finally {
+                setPreflighting(false);
+            }
+        }
+        execute();
+    };
 
     const handleExport = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -34,17 +51,17 @@ export function PipelineStepButton({ stepName, label, onComplete, disabled }: Pr
         <div className="flex flex-col w-full">
             <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow">
                 <button
-                    onClick={execute}
-                    disabled={loading || completed || disabled}
+                    onClick={handleExecute}
+                    disabled={loading || preflighting || completed || disabled}
                     className={`
             flex-1 px-4 py-2 rounded font-medium transition
             ${completed ? 'bg-green-100 text-green-800' : 'bg-blue-600 text-white hover:bg-blue-700'}
-            ${loading ? 'opacity-75 cursor-wait' : ''}
+            ${(loading || preflighting) ? 'opacity-75 cursor-wait' : ''}
             ${disabled ? 'opacity-50 cursor-not-allowed bg-gray-400 hover:bg-gray-400' : ''}
             disabled:cursor-not-allowed
             `}
                 >
-                    {loading && <Loader className="inline animate-spin mr-2" size={16} />}
+                    {(loading || preflighting) && <Loader className="inline animate-spin mr-2" size={16} />}
                     {label}
                 </button>
 

@@ -222,7 +222,7 @@ export default function AnalysisPipelinePage() {
 
 
 
-    const handleSaveConfig = async () => {
+    const handleSaveConfig = async (silent = false) => {
         try {
             setConfigSaving(true);
             // Map snake_case (internal) to camelCase (backend legacy)
@@ -235,12 +235,17 @@ export default function AnalysisPipelinePage() {
                     toGrade: s.to_grade
                 }))
             });
-            alert("Configuration saved!");
+            if (silent !== true) {
+                alert("Configuration saved!");
+            }
             setConfigSaving(false);
         } catch (error) {
             console.error(error);
-            alert("Failed to save configuration");
+            if (silent !== true) {
+                alert("Failed to save configuration");
+            }
             setConfigSaving(false);
+            throw error;
         }
     };
 
@@ -249,6 +254,7 @@ export default function AnalysisPipelinePage() {
 
         setRunningAll(true);
         try {
+            await handleSaveConfig(true);
             for (let i = 0; i <= 5; i++) {
                 setCurrentStep(i);
                 console.log(`Running step ${i}...`);
@@ -516,7 +522,7 @@ export default function AnalysisPipelinePage() {
 
                 <div className="mt-8 flex justify-end">
                     <button
-                        onClick={handleSaveConfig}
+                        onClick={() => handleSaveConfig(false)}
                         disabled={configSaving}
                         className="px-6 py-2 bg-gray-900 text-white rounded hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors font-medium shadow-sm"
                     >
@@ -540,6 +546,7 @@ export default function AnalysisPipelinePage() {
                     label="Run Step 0 - Summarize Participation Data"
                     onComplete={refresh}
                     disabled={!uploaded || runningAll}
+                    onBeforeExecute={() => handleSaveConfig(true)}
                 />
 
 
@@ -620,6 +627,7 @@ export default function AnalysisPipelinePage() {
                                 label={label}
                                 onComplete={refresh}
                                 disabled={!uploaded || runningAll}
+                                onBeforeExecute={() => handleSaveConfig(true)}
                             />
 
                         </div>
